@@ -236,16 +236,17 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Admin - Presensi Digital</title>
-    <!-- Fonts & Icons -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- SheetJS & Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Font Inter (lokal, tanpa internet) -->
+    <link href="../assets/css/inter.css" rel="stylesheet">
+    <!-- Bootstrap 5 CSS (lokal) -->
+    <link href="../assets/css/bootstrap.min.css" rel="stylesheet">
+    <!-- SheetJS & Chart.js (lokal) -->
+    <script src="../assets/js/xlsx.full.min.js"></script>
+    <script src="../assets/js/chart.min.js"></script>
     <style>
+        /* Tab panel switching tanpa reload */
+        .tab-panel { display: none; }
+        .tab-panel.active-panel { display: block; }
         :root {
             --bg-base: #0b0f19;
             --bg-surface: #111827;
@@ -830,24 +831,24 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
         <div class="sidebar-menu">
             <div class="menu-section-label">Presensi & Acara</div>
             
-            <a href="?tab=rapat<?= $selected_acara_id ? '&acara_id='.$selected_acara_id : '' ?>" 
-               class="nav-item-btn <?= $active_tab === 'rapat' ? 'active' : '' ?>">
+            <a href="#" onclick="switchTab('rapat');return false;" 
+               class="nav-item-btn" data-tab="rapat" id="nav-rapat">
                 <div class="nav-left">
                     <span class="nav-icon">📋</span>
                     <span>Presensi Rapat</span>
                 </div>
             </a>
 
-            <a href="?tab=apel" 
-               class="nav-item-btn <?= $active_tab === 'apel' ? 'active' : '' ?>">
+            <a href="#" onclick="switchTab('apel');return false;" 
+               class="nav-item-btn" data-tab="apel" id="nav-apel">
                 <div class="nav-left">
                     <span class="nav-icon">📣</span>
                     <span>Presensi Apel</span>
                 </div>
             </a>
 
-            <a href="?tab=harian" 
-               class="nav-item-btn <?= $active_tab === 'harian' ? 'active' : '' ?>">
+            <a href="#" onclick="switchTab('harian');return false;" 
+               class="nav-item-btn" data-tab="harian" id="nav-harian">
                 <div class="nav-left">
                     <span class="nav-icon">📅</span>
                     <span>Absen Harian</span>
@@ -856,16 +857,16 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
 
             <div class="menu-section-label">Laporan & Pengguna</div>
 
-            <a href="?tab=rekap" 
-               class="nav-item-btn <?= $active_tab === 'rekap' ? 'active' : '' ?>">
+            <a href="#" onclick="switchTab('rekap');return false;" 
+               class="nav-item-btn" data-tab="rekap" id="nav-rekap">
                 <div class="nav-left">
                     <span class="nav-icon">📊</span>
                     <span>Rekap & Tidak Hadir</span>
                 </div>
             </a>
 
-            <a href="?tab=users" 
-               class="nav-item-btn <?= $active_tab === 'users' ? 'active' : '' ?>">
+            <a href="#" onclick="switchTab('users');return false;" 
+               class="nav-item-btn" data-tab="users" id="nav-users">
                 <div class="nav-left">
                     <span class="nav-icon">👥</span>
                     <span>Data Pegawai</span>
@@ -875,8 +876,8 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
 
             <div class="menu-section-label">Sistem & Pengaturan</div>
 
-            <a href="?tab=pengaturan" 
-               class="nav-item-btn <?= $active_tab === 'pengaturan' ? 'active' : '' ?>">
+            <a href="#" onclick="switchTab('pengaturan');return false;" 
+               class="nav-item-btn" data-tab="pengaturan" id="nav-pengaturan">
                 <div class="nav-left">
                     <span class="nav-icon">⚙️</span>
                     <span>Pengaturan & Log</span>
@@ -914,8 +915,8 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
                     ☰
                 </button>
                 <div class="page-header-title">
-                    <span style="font-size: 1.25rem;"><?= $current_tab_info['icon'] ?></span>
-                    <h2><?= htmlspecialchars($current_tab_info['title']) ?></h2>
+                    <span id="pageHeaderIcon" style="font-size: 1.25rem;"><?= $current_tab_info['icon'] ?></span>
+                    <h2 id="pageHeaderTitle"><?= htmlspecialchars($current_tab_info['title']) ?></h2>
                 </div>
             </div>
 
@@ -1000,9 +1001,10 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
                 </div>
             </div>
 
-            <!-- ================= KONTEN TAB SESUAI PARAMETER ================= -->
+            <!-- ================= KONTEN TAB (semua di-render, switch via JS) ================= -->
             <div class="table-wrapper">
-                <?php if ($active_tab === 'rapat'): ?>
+                <?php /* TAB 1: RAPAT */ ?>
+                <div class="tab-panel" id="panel-rapat">
                     <!-- ================= TAB 1: PRESENSI RAPAT ================= -->
                     <div class="row mb-4 align-items-center">
                         <div class="col-md-6 mb-2 mb-md-0">
@@ -1102,7 +1104,9 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
                         </div>
                     <?php endif; ?>
 
-                <?php elseif ($active_tab === 'apel'): ?>
+                </div><!-- /panel-rapat -->
+                <?php /* TAB 2: APEL */ ?>
+                <div class="tab-panel" id="panel-apel">
                     <!-- ================= TAB 2: PRESENSI APEL ================= -->
                     <div class="row mb-3 align-items-center">
                         <div class="col-md-6 mb-2 mb-md-0">
@@ -1203,7 +1207,9 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
                         </tbody>
                     </table>
 
-                <?php elseif ($active_tab === 'harian'): ?>
+                </div><!-- /panel-apel -->
+                <?php /* TAB 3: HARIAN */ ?>
+                <div class="tab-panel" id="panel-harian">
                     <!-- ================= TAB 3: ABSENSI HARIAN ================= -->
                     <div class="row mb-3 align-items-center">
                         <div class="col-md-6 mb-2 mb-md-0">
@@ -1288,7 +1294,9 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
                         </tbody>
                     </table>
 
-                <?php elseif ($active_tab === 'rekap'): ?>
+                </div><!-- /panel-harian -->
+                <?php /* TAB 4: REKAP */ ?>
+                <div class="tab-panel" id="panel-rekap">
                     <!-- ================= TAB 4: REKAP BULANAN & DAFTAR TIDAK HADIR ================= -->
                     
                     <!-- SECTION 1: Rekap Per Pegawai Per Bulan -->
@@ -1393,7 +1401,9 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
                         </tbody>
                     </table>
 
-                <?php elseif ($active_tab === 'users'): ?>
+                </div><!-- /panel-rekap -->
+                <?php /* TAB 5: USERS */ ?>
+                <div class="tab-panel" id="panel-users">
                     <!-- ================= TAB 5: DATA PEGAWAI / USERS ================= -->
                     <div class="row mb-3 align-items-center">
                         <div class="col-md-6 mb-2 mb-md-0">
@@ -1459,7 +1469,9 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
                         </tbody>
                     </table>
 
-                <?php elseif ($active_tab === 'pengaturan'): ?>
+                </div><!-- /panel-users -->
+                <?php /* TAB 6: PENGATURAN */ ?>
+                <div class="tab-panel" id="panel-pengaturan">
                     <!-- ================= TAB 6: PENGATURAN & LOG AKTIVITAS ================= -->
                     
                     <?php if ($change_pass_msg === 'success'): ?>
@@ -1551,9 +1563,9 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
                         </table>
                     </div>
 
-                <?php endif; ?>
-            </div>
-        </div>
+                </div><!-- /panel-pengaturan -->
+            </div><!-- /table-wrapper -->
+        </div><!-- /content-body -->
     </main>
 </div>
 
@@ -1770,9 +1782,80 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
 </div>
 
 <!-- Bootstrap Bundle JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="../assets/js/bootstrap.bundle.min.js"></script>
 
 <script>
+// ---------------- Dynamic Tab Switching (Tanpa Reload Halaman) ----------------
+const tabMeta = {
+    'rapat': { title: 'Presensi Rapat / Acara', icon: '📋' },
+    'apel': { title: 'Presensi Apel (Pagi / Sore)', icon: '📣' },
+    'harian': { title: 'Absen Harian', icon: '📅' },
+    'rekap': { title: 'Rekap & Daftar Tidak Hadir', icon: '📊' },
+    'users': { title: 'Data Pegawai / Users', icon: '👥' },
+    'pengaturan': { title: 'Pengaturan & Log Aktivitas', icon: '⚙️' }
+};
+
+function switchTab(tabId, updateUrl = true) {
+    if (!tabMeta[tabId]) tabId = 'rapat';
+
+    // 1. Sembunyikan semua panel, munculkan panel target
+    document.querySelectorAll('.tab-panel').forEach(function(panel) {
+        panel.classList.remove('active-panel');
+    });
+    var targetPanel = document.getElementById('panel-' + tabId);
+    if (targetPanel) {
+        targetPanel.classList.add('active-panel');
+    }
+
+    // 2. Update status aktif tombol navigasi sidebar
+    document.querySelectorAll('.nav-item-btn').forEach(function(btn) {
+        btn.classList.remove('active');
+    });
+    var targetNav = document.getElementById('nav-' + tabId);
+    if (targetNav) {
+        targetNav.classList.add('active');
+    }
+
+    // 3. Update judul & icon topbar
+    var headerIcon = document.getElementById('pageHeaderIcon');
+    var headerTitle = document.getElementById('pageHeaderTitle');
+    if (headerIcon && tabMeta[tabId]) headerIcon.textContent = tabMeta[tabId].icon;
+    if (headerTitle && tabMeta[tabId]) headerTitle.textContent = tabMeta[tabId].title;
+
+    // 4. Update parameter tab di URL tanpa reload halaman
+    if (updateUrl && window.history && window.history.replaceState) {
+        var url = new URL(window.location);
+        url.searchParams.set('tab', tabId);
+        window.history.replaceState({}, '', url);
+    }
+
+    // 5. Resize Chart jika tab rekap dibuka
+    if (tabId === 'rekap' && window.myAttendanceChart) {
+        setTimeout(function() {
+            window.myAttendanceChart.resize();
+        }, 60);
+    }
+
+    // 6. Tutup sidebar di layar HP/mobile jika sedang terbuka
+    if (window.innerWidth < 992) {
+        toggleSidebar(false);
+    }
+}
+
+// Inisialisasi tab aktif saat pertama kali load
+document.addEventListener('DOMContentLoaded', function() {
+    var urlParams = new URLSearchParams(window.location.search);
+    var currentTab = urlParams.get('tab') || '<?= $active_tab ?>';
+    switchTab(currentTab, false);
+});
+
+// Tangani tombol back / forward browser
+window.addEventListener('popstate', function() {
+    var urlParams = new URLSearchParams(window.location.search);
+    var currentTab = urlParams.get('tab') || 'rapat';
+    switchTab(currentTab, false);
+});
+
 // ---------------- Responsive Sidebar Toggle ----------------
 function toggleSidebar(forceState) {
     const sidebar = document.getElementById('appSidebar');
@@ -1930,7 +2013,7 @@ function exportHarianToExcel() {
 document.addEventListener("DOMContentLoaded", function () {
     var ctx = document.getElementById('attendanceChart');
     if (ctx) {
-        new Chart(ctx, {
+        window.myAttendanceChart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: <?= json_encode($chart_dates) ?>,
