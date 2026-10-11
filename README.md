@@ -1,58 +1,215 @@
-Dari tiga screenshot, panelmu sudah cukup jauh. Yang kurang terutama tab absen harian dan beberapa hal pelengkap.
+# Web Absen Pa — Changelog Implementasi
 
-## Yang sudah ada
+Dokumen ini mencatat semua perubahan aktual yang telah dikerjakan berdasarkan
+GitHub Issues **#8–#17** (ditutup 07 Oktober 2026).
+Semua nama tabel, nama fungsi, dan nama file di bawah ini telah diverifikasi
+langsung dari kode.
 
-| Bagian | Isi yang sudah jalan |
+---
+
+## ✅ Issue #8 — Tab Absen Harian beserta Download Excel
+
+**File:** `absen/admin/dashboard.php`
+
+### Yang dikerjakan:
+
+1. **Active tab**: `'harian'` ditambahkan ke array validasi
+   `['rapat', 'apel', 'harian', 'rekap', 'users', 'pengaturan']`.
+
+2. **Query backend** mengambil dari tabel **`absensi_harian`** (nama aktual di DB)
+   dengan JOIN ke `users`, filter `user_id` dan rentang tanggal.
+
+3. **Filter**: dropdown pegawai + input tanggal mulai & selesai.
+
+4. **Tabel HTML**: kolom No, Tanggal, Nama Pegawai, Jabatan,
+   Jam Masuk (`waktu_checkin`), Jam Pulang (`waktu_checkout`).
+
+5. **Export Excel**: fungsi JS `exportHarianToExcel()` via SheetJS,
+   nama file `absen_harian_YYYY-MM-DD.xlsx`.
+
+---
+
+## ✅ Issue #9 — Proteksi Akses Admin di Server (Login Check)
+
+**File:** `absen/config/database.php`, `absen/admin/auth_check.php`, `absen/admin/dashboard.php`
+
+### Yang dikerjakan:
+
+1. **Fungsi `checkAdminSession()`** di `config/database.php`:
+   - Cek `$_SESSION['admin_logged_in'] === true`
+   - Jika tidak ada → `header("Location: ../admin/login.php"); exit;`
+
+2. **`auth_check.php`** memanggil `require_once database.php` lalu `checkAdminSession()`.
+
+3. **`dashboard.php`** baris pertama: `require_once 'auth_check.php'` sebelum output HTML.
+
+---
+
+## ✅ Issue #10 — Validasi Data Pegawai dan Fitur Nonaktifkan Akun
+
+**File:** `absen/admin/manage_users.php`, `absen/config/database.php`, `absen/api/login.php`
+
+### Yang dikerjakan:
+
+1. **Validasi tambah/edit pegawai** (server-side): NIP wajib angka, Username tanpa spasi.
+2. **Kolom `is_active`** (TINYINT default 1) ditambahkan otomatis via `ALTER TABLE`.
+3. **Tombol Nonaktifkan/Aktifkan** di tabel pegawai (soft-delete).
+4. **`api/login.php`** menolak login Android jika `is_active = 0`.
+
+---
+
+## ✅ Issue #11 — Rekap Per Pegawai Per Bulan dan Daftar Tidak Hadir
+
+**File:** `absen/admin/dashboard.php`
+
+### Yang dikerjakan:
+
+1. **Tab "📊 Rekap"** dengan dua sub-section.
+2. **Rekap bulanan per pegawai**: query dengan sub-select COUNT dari `presensi_apel`, `presensi`, dan `absensi_harian`.
+3. **Daftar tidak hadir apel**: query `NOT IN` subquery untuk pegawai aktif yang tidak ada di `presensi_apel`.
+4. **Card summary**: "Hadir X dari Y pegawai".
+
+---
+
+## ✅ Issue #12 — Perbaikan Filter dan Tampilan Tabel
+
+**File:** `absen/admin/dashboard.php`
+
+### Yang dikerjakan:
+
+1. Filter pegawai di tab Apel.
+2. Pencarian real-time dan pagination di tabel.
+3. Daftar semua rapat beserta status, PIN, dan tombol aksi.
+4. Kartu REST API dipindahkan ke tab Pengaturan & Log.
+
+---
+
+## ✅ Issue #13 — Fix: Label Sesi Apel Salah Hari
+
+**File:** `absen/api/absen_apel.php`
+
+### Yang dikerjakan:
+
+1. Label hari dihitung dari tanggal aktual: `$dayOfWeek = (int)date('N', strtotime($tanggal));`.
+2. Validasi jam & hari apel (Pagi: Senin 07:00–08:30, Sore: Jumat 16:00–17:30).
+
+---
+
+## ✅ Issue #14 — Perbaikan Format Excel (Header & Catatan Kaki)
+
+**File:** `absen/admin/dashboard.php`
+
+### Yang dikerjakan:
+
+1. Baris judul + nama laporan + periode filter.
+2. Header kolom dicetak tebal.
+3. Catatan kaki rekap presensi resmi.
+
+---
+
+## ✅ Issue #15 — Log Aktivitas Admin, Ganti Password, dan Grafik
+
+**File:** `absen/config/database.php`, `absen/admin/dashboard.php`
+
+### Yang dikerjakan:
+
+1. Tabel `log_aktivitas` dan fungsi `logAdminActivity()`.
+2. Grafik Kehadiran (7 Hari Terakhir) via Chart.js.
+3. Ganti Password Admin dan tabel Log Aktivitas.
+
+---
+
+## ✅ Issue #16 — Autentikasi API Android menggunakan JWT Bearer Token
+
+**File:** `absen/config/jwt.php`, `absen/config/database.php`, `absen/api/login.php`, `absen/api/refresh_token.php`, `absen/api/logout.php`, `absen/api/user_status.php`, `absen/api/absen_harian.php`, `absen/api/absen_apel.php`, `absen/api/absen.php`
+
+### Yang dikerjakan:
+
+1. **JWT Helper (`config/jwt.php`)**: Implementasi native PHP JWT HS256.
+2. **Skema DB `token_blacklist`**: Menyimpan token JTI yang di-revoke.
+3. **Login API (`api/login.php`)**: Mengembalikan `access_token` (8 jam) & `refresh_token` (7 hari).
+4. **Refresh & Logout**: `api/refresh_token.php` dan `api/logout.php`.
+5. **Proteksi API**: Header `Authorization: Bearer <token>` diwajibkan di semua endpoint API.
+
+---
+
+## ✅ Issue #17 — Proteksi CSRF pada Semua Form POST Admin
+
+**File:** `absen/config/csrf.php`, `absen/config/database.php`, `absen/admin/login.php`, `absen/admin/manage_users.php`, `absen/admin/manage_acara.php`, `absen/admin/dashboard.php`
+
+### Yang dikerjakan:
+
+1. **CSRF Helper (`config/csrf.php`)**:
+   - `generateCsrfToken()`: Menghasilkan token acak 64 karakter heksadesimal (`bin2hex(random_bytes(32))`).
+   - `csrfField()`: Menghasilkan elemen `<input type="hidden" name="csrf_token" value="...">`.
+   - `verifyCsrfToken()`: Memverifikasi kesesuaian token request dengan session via `hash_equals()`.
+   - `enforceCsrfCheck()`: Middleware penolak request POST tanpa token valid (HTTP 403 Forbidden).
+
+2. **Integrasi Form & Handler Admin**:
+   - Disisipkan `enforceCsrfCheck()` pada awal pemrosesan POST di `admin/login.php`, `admin/manage_users.php`, `admin/manage_acara.php`, dan `admin/dashboard.php`.
+   - Disisipkan `<?= csrfField() ?>` pada seluruh elemen form POST di panel administrator.
+
+---
+
+## ✅ Issue #31 — Restriksi IP Jaringan Lokal Kantor pada Endpoint Presensi
+
+**File:** `absen/config/ip_whitelist.php`, `absen/config/database.php`, `absen/api/absen.php`, `absen/api/absen_apel.php`, `absen/api/absen_harian.php`
+
+### Yang dikerjakan:
+
+1. **IP Whitelist Helper (`config/ip_whitelist.php`)**:
+   - `getClientIp()`: Mengambil `$_SERVER['REMOTE_ADDR']` secara aman tanpa mempercayai header `X-Forwarded-For` yang rentan diajukan secara terlarang oleh klien.
+   - `isIpAllowed($ip, $allowedNetworks)`: Memvalidasi alamat IP terhadap IP kantor utama **`192.168.5.100`**, rentan subnet Wi-Fi/LAN kantor (`192.168.5.0/24`), CIDR IPv4 umum (`192.168.0.0/16`, `10.0.0.0/8`), serta IP localhost (`127.0.0.1/32`, `::1/128`).
+   - `enforceNetworkRestriction()`: Middleware penolak request dari IP di luar jaringan kantor dengan HTTP status `403 Forbidden` dan format JSON `code: "NETWORK_RESTRICTED"`.
+
+2. **Integrasi Endpoint Absensi**:
+   - Disisipkan `enforceNetworkRestriction()` pada endpoint `api/absen.php`, `api/absen_apel.php`, dan `api/absen_harian.php`.
+   - Endpoint autentikasi (login, refresh token, status user) tetap terbuka tanpa pembatasan IP agar pengguna dapat masuk terlebih dahulu.
+
+---
+
+## Checklist Pengujian
+
+| # | Uji | Hasil yang benar |
+|---|---|---|
+| 1 | Buka `dashboard.php` di incognito tanpa login | Redirect ke `login.php` |
+| 2 | Kirim absen apel pagi hari Rabu | HTTP 400 — ditolak |
+| 3 | Kirim absen apel sore hari Senin | HTTP 400 — ditolak |
+| 4 | Kirim absen apel pagi Senin jam 09:00 | HTTP 400 — melewati batas jam |
+| 5 | Nonaktifkan pegawai → login Android | Login ditolak (`is_active = 0`) |
+| 6 | Tambah pegawai NIP berhuruf | Validasi server menolak |
+| 7 | Tambah pegawai username berspasi | Validasi server menolak |
+| 8 | Unduh Excel tab Harian | Ada judul, catatan kaki, nama file `absen_harian_*.xlsx` |
+| 9 | Rekap bulan ini | Angka cocok isi `presensi_apel` + `absensi_harian` |
+| 10 | Ganti password → login ulang | Password baru berlaku, tercatat di Log Aktivitas |
+| 11 | Login API Android (`api/login.php`) | Mengembalikan `access_token` (JWT) & `refresh_token` |
+| 12 | Akses API tanpa Header Authorization | HTTP 401 — Akses ditolak |
+| 13 | Logout API (`api/logout.php`) | Token masuk `token_blacklist`, request berikutnya ditolak |
+| 14 | Submit form POST admin tanpa CSRF token | HTTP 403 Forbidden — Request ditolak |
+| 15 | Akses API Absen dari IP luar kantor (Public IP) | HTTP 403 Forbidden — `NETWORK_RESTRICTED` |
+
+---
+
+## Ringkasan File yang Diubah
+
+| File | Issue |
 |---|---|
-| **Header** | Nama panel, sapaan admin, tombol Logout |
-| **Kartu REST API** | Base URL, tombol salin, daftar endpoint (`login`, `user_status`, `absen_harian`, `acara`, `absen`, `absen_apel`) |
-| **Aksi cepat** | Buat Acara Rapat Baru, Tambah Pegawai Baru |
-| **Tab Presensi Rapat** | Pilih acara, info acara (nama, PIN, status), tombol ubah ke TUTUP, tabel (waktu, nama, jabatan, tanda tangan), Download Excel |
-| **Tab Presensi Apel** | Filter sesi dan rentang tanggal, tabel (tanggal dan jam, sesi, nama, jabatan, tanda tangan), Download Excel Apel |
-| **Tab Data Pegawai** | Daftar akun (NIP, nama, jabatan, username), Edit/Password, Hapus, Tambah Pegawai |
+| `absen/admin/dashboard.php` | #8, #9, #11, #12, #14, #15, #17 |
+| `absen/admin/manage_users.php` | #10, #17 |
+| `absen/admin/manage_acara.php` | #17 |
+| `absen/admin/login.php` | #10, #16, #17 |
+| `absen/admin/auth_check.php` | #9 |
+| `absen/api/absen_apel.php` | #13, #16, #31 |
+| `absen/api/absen_harian.php` | #16, #31 |
+| `absen/api/absen.php` | #16, #31 |
+| `absen/api/user_status.php` | #16 |
+| `absen/api/refresh_token.php` | #16 |
+| `absen/api/logout.php` | #16 |
+| `absen/config/csrf.php` | #17 (Baru) |
+| `absen/config/jwt.php` | #16 |
+| `absen/config/ip_whitelist.php` | #31 (Baru) |
+| `absen/config/database.php` | #9, #10, #15, #16, #17, #31 |
 
-## Yang masih perlu ditambah
+---
 
-**Wajib (sesuai spesifikasi dan judul laporanmu)**
-
-| Yang ditambah | Keterangan |
-|---|---|
-| **Tab Absen Harian** | Satu-satunya tab yang belum ada. Kolom: nama, jabatan, tanggal, jam masuk, jam pulang, plus filter tanggal dan pegawai, plus **Download Excel** |
-| **Foto dokumentasi** | Kalau foto absen kerja dikirim ke server, tampilkan di tab harian (kolom atau tombol "lihat foto") dan sertakan di Excel |
-| **Proteksi akses admin di server** | Halaman dan endpoint unduh Excel harus mengecek login admin di PHP. Coba buka link unduh dalam jendela incognito tanpa login, dan pastikan ditolak |
-
-**Sebaiknya ada**
-
-| Yang ditambah | Alasan |
-|---|---|
-| **Rekap per pegawai per bulan** | Jumlah apel pagi, apel sore, dan rapat yang diikuti. Ini yang paling berguna untuk admin dan membuat sisi "informasi" terasa |
-| **Daftar yang tidak hadir** | Pegawai tanpa absen apel pada tanggal tertentu. Datanya bisa diturunkan dari tabel yang ada |
-| **Ringkasan angka di atas tabel** | Contoh: "Hadir 4 dari 5 pegawai" |
-| **Filter pegawai di tab apel** | Sekarang hanya ada filter sesi dan tanggal |
-| **Pencarian dan pagination** | Supaya tabel tetap cepat saat data bertambah |
-| **Daftar semua rapat** | Sekarang rapat dipilih lewat dropdown. Tambahkan tampilan daftar rapat dengan tanggal, status, serta aksi buka, tutup, edit, dan hapus |
-| **Nonaktifkan pegawai** | Ganti atau lengkapi tombol Hapus, karena menghapus akun bisa memutus relasi ke riwayat absennya |
-
-**Opsional**
-
-- Log aktivitas admin (siapa membuat atau menutup rapat, mereset password).
-- Ganti password admin sendiri.
-- Grafik kehadiran sederhana.
-
-## Yang perlu diperbaiki dari screenshot
-
-1. **Label "Pagi (Senin)" salah untuk 07/10/2026.** Tanggal itu hari Rabu, tapi baris deni tetap berlabel Senin. Label sepertinya ditempel dari nilai `sesi`, bukan dari harinya. Kalau validasi hari dan jam apel sudah ada di server, baris itu seharusnya tidak pernah masuk. Ini sekaligus bukti bahwa "validasi server" di judulmu belum terpasang.
-2. **Data pegawai tidak konsisten.** Contohnya akun "akjfh31" berusername `dain`, NIP `q9u3uprq` berisi huruf, dan username "Fernando Hasiholan" memuat spasi. Tambahkan validasi saat tambah dan edit: NIP angka dan unik, username tanpa spasi dan unik. Rapikan juga data ujinya sebelum screenshot masuk laporan.
-3. **PIN rapat `123456`.** Wajar untuk uji coba. Pastikan admin bisa mengisi PIN sendiri saat membuat rapat, sesuai spesifikasimu, dan batasi percobaan PIN salah di server.
-4. **Kartu "Integrasi REST API".** Berguna untuk dokumentasi dan demo, tapi menampilkan alamat dan daftar endpoint di halaman utama kurang aman untuk penggunaan nyata. Pindahkan ke tab Pengaturan atau sembunyikan setelah uji coba selesai.
-5. **Isi file Excel belum kulihat.** Dari screenshot hanya tombolnya yang terlihat. Cek sendiri hasil unduhan: apakah tanda tangan muncul sebagai gambar (bukan teks `data:image/png;base64...`), ada judul dan periode di atas tabel, dan ada catatan bahwa data berasal dari konfirmasi pegawai, bukan pengganti presensi resmi.
-
-## Urutan pengerjaan yang kusarankan
-
-1. Tab Absen Harian beserta unduh Excel.
-2. Cek proteksi login admin pada halaman dan unduhan.
-3. Validasi data pegawai dan nonaktifkan akun.
-4. Rekap per pegawai dan daftar tidak hadir.
-5. Perbaikan tampilan dan filter lainnya.
-
-Satu hal yang menentukan isi tab harian: **foto dokumentasi absen kerja itu ikut dikirim ke server, atau hanya tersimpan di HP?** Kalau dikirim, kolom foto perlu ada di tabel dan Excel. Kalau tidak, tab harian cukup berisi jam masuk dan pulang.
+*Terakhir diperbarui: 08 Oktober 2026.*

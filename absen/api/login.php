@@ -41,7 +41,7 @@ if ($username === '' || $password === '') {
 }
 
 try {
-    $stmt = $pdo->prepare("SELECT id, nip, nama, jabatan, username, password FROM users WHERE username = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, nip, nama, jabatan, username, password, is_active FROM users WHERE username = ? LIMIT 1");
     $stmt->execute([$username]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -54,22 +54,55 @@ try {
         exit;
     }
 
-    // Success response - sertakan jabatan & profil baik di root maupun di 'data' agar kompatibel dengan berbagai model Android
-    http_response_code(200);
-    echo json_encode([
-        'status'   => 'success',
-        'message'  => 'Login berhasil.',
+    if (isset($user['is_active']) && (int)$user['is_active'] === 0) {
+        http_response_code(403);
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'Akun Anda telah dinonaktifkan oleh administrator.'
+        ]);
+        exit;
+    }
+
+    // Generate JWT Tokens
+    $tokenPayload = [
         'user_id'  => (int)$user['id'],
         'username' => $user['username'],
         'nama'     => $user['nama'],
         'jabatan'  => $user['jabatan'],
         'nip'      => $user['nip'],
-        'data'     => [
-            'user_id'  => (int)$user['id'],
-            'nip'      => $user['nip'],
-            'nama'     => $user['nama'],
-            'jabatan'  => $user['jabatan'],
-            'username' => $user['username']
+        'type'     => 'access'
+    ];
+    $accessToken = generateJwtToken($tokenPayload, 28800); // 8 Jam
+
+    $refreshPayload = [
+        'user_id'  => (int)$user['id'],
+        'username' => $user['username'],
+        'type'     => 'refresh'
+    ];
+    $refreshToken = generateJwtToken($refreshPayload, 604800); // 7 Hari
+
+    // Success response - sertakan JWT Token, jabatan & profil
+    http_response_code(200);
+    echo json_encode([
+        'status'        => 'success',
+        'message'       => 'Login berhasil.',
+        'token_type'    => 'Bearer',
+        'access_token'  => $accessToken,
+        'refresh_token' => $refreshToken,
+        'expires_in'    => 28800,
+        'user_id'       => (int)$user['id'],
+        'username'      => $user['username'],
+        'nama'          => $user['nama'],
+        'jabatan'       => $user['jabatan'],
+        'nip'           => $user['nip'],
+        'data'          => [
+            'user_id'       => (int)$user['id'],
+            'nip'           => $user['nip'],
+            'nama'          => $user['nama'],
+            'jabatan'       => $user['jabatan'],
+            'username'      => $user['username'],
+            'access_token'  => $accessToken,
+            'refresh_token' => $refreshToken
         ]
     ]);
 

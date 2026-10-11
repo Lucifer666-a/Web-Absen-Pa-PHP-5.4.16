@@ -14,7 +14,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/../config/database.php';
 
-// Ambil user_id dari GET atau POST JSON
+// Verifikasi JWT Bearer Token
+$tokenPayload = verifyApiAuth($pdo, 'access');
+
+// Ambil user_id dari GET, POST JSON, atau dari Token Payload
 $user_id = (int)($_GET['user_id'] ?? $_GET['userId'] ?? 0);
 
 if ($user_id <= 0) {
@@ -26,11 +29,15 @@ if ($user_id <= 0) {
     }
 }
 
+if ($user_id <= 0 && isset($tokenPayload['user_id'])) {
+    $user_id = (int)$tokenPayload['user_id'];
+}
+
 if ($user_id <= 0) {
     http_response_code(400);
     echo json_encode([
         'status'  => 'error',
-        'message' => 'Parameter user_id wajib dikirim.'
+        'message' => 'Parameter user_id tidak valid.'
     ]);
     exit;
 }

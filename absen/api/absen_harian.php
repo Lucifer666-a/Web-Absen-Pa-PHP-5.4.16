@@ -14,6 +14,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/../config/database.php';
 
+// Restriksi Jaringan Kantor (IP Whitelist)
+enforceNetworkRestriction();
+
+// Verifikasi JWT Bearer Token
+$tokenPayload = verifyApiAuth($pdo, 'access');
+
 // Ambil input JSON jika ada
 $rawInput = file_get_contents('php://input');
 $rawInput = ltrim($rawInput, "\xEF\xBB\xBF");
@@ -29,6 +35,9 @@ function getParam($key, $default = null) {
 }
 
 $user_id = (int)getParam('user_id', getParam('userId', 0));
+if ($user_id <= 0 && isset($tokenPayload['user_id'])) {
+    $user_id = (int)$tokenPayload['user_id'];
+}
 $aksi    = strtolower(trim((string)getParam('aksi', getParam('action', ''))));
 
 if ($user_id <= 0) {
@@ -36,7 +45,7 @@ if ($user_id <= 0) {
     echo json_encode([
         'success' => false,
         'status'  => 'error',
-        'message' => 'Parameter user_id wajib dikirim.'
+        'message' => 'Parameter user_id tidak valid.'
     ]);
     exit;
 }

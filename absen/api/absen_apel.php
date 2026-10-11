@@ -22,6 +22,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 require_once __DIR__ . '/../config/database.php';
 
+// Restriksi Jaringan Kantor (IP Whitelist)
+enforceNetworkRestriction();
+
+// Verifikasi JWT Bearer Token
+$tokenPayload = verifyApiAuth($pdo, 'access');
+
 // Baca body: JSON atau Form POST
 $rawInput = file_get_contents('php://input');
 $rawInput = ltrim($rawInput, "\xEF\xBB\xBF"); // Strip BOM jika ada
@@ -31,13 +37,14 @@ if (!is_array($input) || empty($input)) {
 }
 
 // Petakan field:
-$user_id       = (int)($input['user_id']     ?? $input['userId']     ?? 0);
-$nama          = trim($input['nama']         ?? $input['name']       ?? '');
-$jabatan       = trim($input['jabatan']      ?? $input['role']       ?? $input['instansi']  ?? '');
-$tanda_tangan  = trim($input['tanda_tangan'] ?? $input['tandaTangan']?? $input['signature'] ?? '');
+$user_id       = (int)($input['user_id']     ?? $input['userId']     ?? $tokenPayload['user_id'] ?? 0);
+$nama          = trim($input['nama']         ?? $input['name']       ?? $tokenPayload['nama']    ?? '');
+$jabatan       = trim($input['jabatan']      ?? $input['role']       ?? $input['instansi']      ?? $tokenPayload['jabatan'] ?? '');
+$tanda_tangan  = trim($input['tanda_tangan'] ?? $input['tandaTangan']?? $input['signature']     ?? '');
 $sesi          = strtolower(trim($input['sesi'] ?? $input['session'] ?? ''));
 $tanggal       = trim($input['tanggal']      ?? $input['date']       ?? date('Y-m-d'));
-$waktu         = trim($input['waktu']        ?? $input['time']       ?? date('H:i:s'));
+// Waktu SELALU diambil dari server untuk mencegah manipulasi klien
+$waktu         = date('H:i:s');
 
 // Jika user_id dikirim tapi nama/jabatan kosong -> auto-fetch dari DB users
 if ($user_id > 0 && ($nama === '' || $jabatan === '')) {
@@ -79,6 +86,47 @@ if (!in_array($sesi, ['pagi', 'sore'], true)) {
     exit;
 }
 
+// Validasi Hari dan Jam Apel
+// Apel Pagi: Hanya hari Senin (1), Jam 07:00 - 08:30
+// Apel Sore: Hanya hari Jumat (5), Jam 16:00 - 17:30
+$dayOfWeek = (int)date('N', strtotime($tanggal)); // 1 (Senin) s/d 7 (Minggu)
+
+if ($sesi === 'pagi') {
+    if ($dayOfWeek !== 1) {
+        http_response_code(400);
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'Absen Apel Pagi hanya dapat dilakukan pada hari Senin.'
+        ]);
+        exit;
+    }
+    if ($waktu < '07:00:00' || $waktu > '08:30:00') {
+        http_response_code(400);
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'Absen Apel Pagi hanya dibuka pukul 07:00 - 08:30 WIB.'
+        ]);
+        exit;
+    }
+} elseif ($sesi === 'sore') {
+    if ($dayOfWeek !== 5) {
+        http_response_code(400);
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'Absen Apel Sore hanya dapat dilakukan pada hari Jumat.'
+        ]);
+        exit;
+    }
+    if ($waktu < '16:00:00' || $waktu > '17:30:00') {
+        http_response_code(400);
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'Absen Apel Sore hanya dibuka pukul 16:00 - 17:30 WIB.'
+        ]);
+        exit;
+    }
+}
+
 // Auto-tambah prefix jika Android kirim raw Base64
 if (strpos($tanda_tangan, 'data:image/') !== 0) {
     $tanda_tangan = 'data:image/png;base64,' . str_replace(["\r", "\n", " "], ['', '', '+'], $tanda_tangan);
@@ -111,9 +159,11 @@ try {
 
 } catch (\Exception $e) {
     http_response_code(500);
+    // Jangan expose detail error ke klien di produksi
+    error_log('[absen_apel] ' . $e->getMessage());
     echo json_encode([
         'status'  => 'error',
-        'message' => 'Server error: ' . $e->getMessage()
+        'message' => 'Terjadi kesalahan pada server. Silakan coba lagi.'
     ]);
 }
 
