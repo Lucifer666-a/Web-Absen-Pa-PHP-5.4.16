@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS `absensi_harian` (
   `waktu_checkin`   TIME NULL,
   `waktu_checkout`  TIME NULL,
   `status_checkin`  ENUM('tepat_waktu', 'terlambat') NULL,
+  `foto_path`       VARCHAR(255) NULL,
   `created_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),

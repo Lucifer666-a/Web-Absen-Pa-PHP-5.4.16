@@ -18,6 +18,8 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     echo json_encode(['status' => 'error', 'message' => 'Unauthorized admin session']);
     exit;
 }
+// Lepas session lock agar request PHP lain (dashboard, API absen, dll) tidak terblokir / timeout
+session_write_close();
 
 // Set Header SSE
 header('Content-Type: text/event-stream; charset=UTF-8');
@@ -105,7 +107,7 @@ for ($cycle = 0; $cycle < $max_cycles; $cycle++) {
 
     // 3. Cek Absensi Harian baru
     $stmt = $pdo->prepare("
-        SELECT h.id, h.user_id, h.tanggal, h.waktu_checkin, h.waktu_checkout, h.created_at, h.updated_at, u.nama, u.jabatan, u.nip
+        SELECT h.id, h.user_id, h.tanggal, h.waktu_checkin, h.waktu_checkout, h.foto_path, h.created_at, h.updated_at, u.nama, u.jabatan, u.nip
         FROM absensi_harian h
         JOIN users u ON h.user_id = u.id
         WHERE h.id > ?

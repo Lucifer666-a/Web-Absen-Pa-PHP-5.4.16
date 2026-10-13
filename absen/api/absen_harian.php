@@ -77,7 +77,7 @@ try {
         }
 
         $stmtRiwayat = $pdo->prepare("
-            SELECT id, tanggal, waktu_checkin, waktu_checkout, created_at 
+            SELECT id, tanggal, waktu_checkin, waktu_checkout, foto_path, created_at 
             FROM absensi_harian 
             WHERE user_id = ? AND tanggal LIKE ? 
             ORDER BY tanggal DESC
@@ -96,7 +96,155 @@ try {
         exit;
     }
 
-    // METHOD POST (atau GET dengan param aksi): Prosedur Check-in / Check-out
+// Helper upload foto absensi harian
+function handleFotoUpload($userId, $tanggal) {
+    // 1. Cek dari $_FILES
+    $fileInfo = $_FILES['foto'] ?? $_FILES['foto_absen'] ?? $_FILES['image'] ?? null;
+    $tempFile = null;
+    $originalName = '';
+    $fileSize = 0;
+
+    if ($fileInfo && isset($fileInfo['error']) && $fileInfo['error'] !== UPLOAD_ERR_NO_FILE) {
+        if ($fileInfo['error'] !== UPLOAD_ERR_OK) {
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'status'  => 'error',
+                'message' => 'Gagal mengunggah foto (kode error: ' . $fileInfo['error'] . ').'
+            ]);
+            exit;
+        }
+        $tempFile     = $fileInfo['tmp_name'];
+        $originalName = $fileInfo['name'];
+        $fileSize     = (int)$fileInfo['size'];
+    } else {
+        // 2. Cek base64 string jika dikirim via JSON/POST
+        $base64Data = getParam('foto', getParam('foto_absen', getParam('image', null)));
+        if (!empty($base64Data) && is_string($base64Data)) {
+            // Strip data URI prefix jika ada (misal data:image/jpeg;base64,...)
+            if (preg_match('/^data:image\/(\w+);base64,/', $base64Data, $typeMatch)) {
+                $base64Data = substr($base64Data, strpos($base64Data, ',') + 1);
+            }
+            $decoded = base64_decode($base64Data, true);
+            if ($decoded !== false && strlen($decoded) > 0) {
+                $tmpHandle = tmpfile();
+                if ($tmpHandle) {
+                    fwrite($tmpHandle, $decoded);
+                    $meta = stream_get_meta_data($tmpHandle);
+                    $tempFile = $meta['uri'];
+                    $fileSize = strlen($decoded);
+                    $originalName = 'upload.jpg';
+                }
+            }
+        }
+    }
+
+    if (!$tempFile || !file_exists($tempFile)) {
+        return null; // Foto bersifat opsional / tidak dikirim
+    }
+
+    // Validasi ukuran maks 2MB (2 * 1024 * 1024 byte = 2,097,152 byte)
+    $maxSize = 2 * 1024 * 1024;
+    if ($fileSize > $maxSize) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'status'  => 'error',
+            'message' => 'Ukuran file foto melebihi batas maksimal 2MB.'
+        ]);
+        exit;
+    }
+
+    // Validasi ekstensi
+    $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    $allowedExts = ['jpg', 'jpeg', 'png'];
+    if (!in_array($ext, $allowedExts, true)) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'status'  => 'error',
+            'message' => 'Format file tidak didukung. Hanya file .jpg, .jpeg, dan .png yang diizinkan.'
+        ]);
+        exit;
+    }
+
+    // Validasi MIME type & signature gambar (cegah file non-gambar/malicious)
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mimeType = finfo_file($finfo, $tempFile);
+    finfo_close($finfo);
+
+    $allowedMimes = ['image/jpeg', 'image/jpg', 'image/png'];
+    if (!in_array($mimeType, $allowedMimes, true)) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'status'  => 'error',
+            'message' => 'File bukan gambar valid. Hanya file JPEG dan PNG yang diizinkan.'
+        ]);
+        exit;
+    }
+
+    // Cek dengan getimagesize untuk memastikan keabsahan gambar
+    $imgSize = @getimagesize($tempFile);
+    if ($imgSize === false) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'status'  => 'error',
+            'message' => 'File gambar rusak atau tidak valid.'
+        ]);
+        exit;
+    }
+
+    // Struktur folder: absen/uploads/foto_absen/YYYY/MM/DD/
+    $tglParts = explode('-', $tanggal); // [YYYY, MM, DD]
+    $yyyy = $tglParts[0] ?? date('Y');
+    $mm   = $tglParts[1] ?? date('m');
+    $dd   = $tglParts[2] ?? date('d');
+
+    $targetSubDir = "uploads/foto_absen/{$yyyy}/{$mm}/{$dd}";
+    $targetDir    = __DIR__ . "/../{$targetSubDir}";
+
+    if (!is_dir($targetDir)) {
+        if (!mkdir($targetDir, 0755, true) && !is_dir($targetDir)) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'status'  => 'error',
+                'message' => 'Gagal membuat direktori penyimpanan foto di server.'
+            ]);
+            exit;
+        }
+    }
+
+    // Nama file: {user_id}_{timestamp}.jpg (selalu ekstensi standar .jpg atau sesuai format)
+    $timestamp = time();
+    $targetFileName = "{$userId}_{$timestamp}.jpg";
+    $targetFilePath = "{$targetDir}/{$targetFileName}";
+
+    // Simpan file (mendukung uploaded file atau temp file)
+    $saved = false;
+    if (is_uploaded_file($tempFile)) {
+        $saved = move_uploaded_file($tempFile, $targetFilePath);
+    } else {
+        $saved = copy($tempFile, $targetFilePath);
+    }
+
+    if (!$saved) {
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'status'  => 'error',
+            'message' => 'Gagal menyimpan file foto ke server.'
+        ]);
+        exit;
+    }
+
+    // Return relative path dari root folder /absen/
+    return "{$targetSubDir}/{$targetFileName}";
+}
+
+// METHOD POST (atau GET dengan param aksi): Prosedur Check-in / Check-out
 if ($aksi === 'checkin') {
     // Validasi: belum dibuka
     if ($currentTime < '07:00:00') {
@@ -135,12 +283,30 @@ if ($aksi === 'checkin') {
         exit;
     }
 
+    // Proses upload foto jika ada
+    $fotoPath = handleFotoUpload($user_id, $today);
+
     if ($existing) {
-        $stmtUpdate = $pdo->prepare("UPDATE absensi_harian SET waktu_checkin = ? WHERE id = ?");
-        $stmtUpdate->execute([$currentTime, $existing['id']]);
+        if ($fotoPath !== null) {
+            $stmtUpdate = $pdo->prepare("UPDATE absensi_harian SET waktu_checkin = ?, foto_path = ? WHERE id = ?");
+            $stmtUpdate->execute([$currentTime, $fotoPath, $existing['id']]);
+        } else {
+            $stmtUpdate = $pdo->prepare("UPDATE absensi_harian SET waktu_checkin = ? WHERE id = ?");
+            $stmtUpdate->execute([$currentTime, $existing['id']]);
+        }
     } else {
-        $stmtInsert = $pdo->prepare("INSERT INTO absensi_harian (user_id, tanggal, waktu_checkin) VALUES (?, ?, ?)");
-        $stmtInsert->execute([$user_id, $today, $currentTime]);
+        $stmtInsert = $pdo->prepare("INSERT INTO absensi_harian (user_id, tanggal, waktu_checkin, foto_path) VALUES (?, ?, ?, ?)");
+        $stmtInsert->execute([$user_id, $today, $currentTime, $fotoPath]);
+    }
+
+    $responseData = [
+        'user_id'       => $user_id,
+        'tanggal'       => $today,
+        'waktu'         => $currentTime,
+        'waktu_checkin' => $currentTime
+    ];
+    if ($fotoPath !== null) {
+        $responseData['foto_path'] = $fotoPath;
     }
 
     http_response_code(200);
@@ -148,12 +314,7 @@ if ($aksi === 'checkin') {
         'success' => true,
         'status'  => 'success',
         'message' => 'Check-in berhasil dicatat.',
-        'data'    => [
-            'user_id'       => $user_id,
-            'tanggal'       => $today,
-            'waktu'         => $currentTime,
-            'waktu_checkin' => $currentTime
-        ]
+        'data'    => $responseData
     ]);
     exit;
     }
@@ -205,20 +366,33 @@ if ($aksi === 'checkin') {
             exit;
         }
 
-        $stmtUpdate = $pdo->prepare("UPDATE absensi_harian SET waktu_checkout = ? WHERE id = ?");
-        $stmtUpdate->execute([$currentTime, $existing['id']]);
+        // Proses upload foto jika dikirim saat checkout (misal jika belum ada atau diperbarui)
+        $fotoPath = handleFotoUpload($user_id, $today);
+
+        if ($fotoPath !== null) {
+            $stmtUpdate = $pdo->prepare("UPDATE absensi_harian SET waktu_checkout = ?, foto_path = ? WHERE id = ?");
+            $stmtUpdate->execute([$currentTime, $fotoPath, $existing['id']]);
+        } else {
+            $stmtUpdate = $pdo->prepare("UPDATE absensi_harian SET waktu_checkout = ? WHERE id = ?");
+            $stmtUpdate->execute([$currentTime, $existing['id']]);
+        }
+
+        $responseData = [
+            'user_id'        => $user_id,
+            'tanggal'        => $today,
+            'waktu'          => $currentTime,
+            'waktu_checkout' => $currentTime,
+        ];
+        if ($fotoPath !== null) {
+            $responseData['foto_path'] = $fotoPath;
+        }
 
         http_response_code(200);
         echo json_encode([
             'success' => true,
             'status'  => 'success',
             'message' => 'Check-out berhasil dicatat.',
-            'data'    => [
-                'user_id'        => $user_id,
-                'tanggal'        => $today,
-                'waktu'          => $currentTime,
-                'waktu_checkout' => $currentTime,
-            ]
+            'data'    => $responseData
         ]);
         exit;
     }

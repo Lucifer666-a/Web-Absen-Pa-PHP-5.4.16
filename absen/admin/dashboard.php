@@ -19,202 +19,294 @@ if (!in_array($active_tab, ['rapat', 'apel', 'harian', 'rekap', 'users', 'pengat
     $active_tab = 'rapat';
 }
 
-// ----------------------------------------------------
-// DATA TAB 1: PRESENSI RAPAT / ACARA
-// ----------------------------------------------------
-$stmtListAcara = $pdo->query("SELECT * FROM acara ORDER BY id DESC");
-$list_acara = $stmtListAcara->fetchAll();
+// Ambil list user umum untuk filter dropdown & sidebar counter
+$stmtUsers = $pdo->query("SELECT id, nip, nama, jabatan, username, is_active FROM users ORDER BY nama ASC");
+$list_users = $stmtUsers->fetchAll();
+$total_users = count($list_users);
 
+// ----------------------------------------------------
+// DATA TAB 1: PRESENSI RAPAT / ACARA (Jika tab rapat)
+// ----------------------------------------------------
+$list_acara = [];
 $selected_acara_id = $_GET['acara_id'] ?? null;
-if (!$selected_acara_id && count($list_acara) > 0) {
-    $selected_acara_id = $list_acara[0]['id'];
-}
-
 $active_acara = null;
-foreach ($list_acara as $acara) {
-    if ($acara['id'] == $selected_acara_id) {
-        $active_acara = $acara;
-        break;
-    }
-}
-
 $data_presensi = [];
-if ($selected_acara_id) {
-    $presensiStmt = $pdo->prepare("SELECT * FROM presensi WHERE acara_id = ? ORDER BY waktu_absen DESC");
-    $presensiStmt->execute([$selected_acara_id]);
-    $data_presensi = $presensiStmt->fetchAll();
+$total_hadir = 0;
+
+if ($active_tab === 'rapat') {
+    $stmtListAcara = $pdo->query("SELECT * FROM acara ORDER BY id DESC");
+    $list_acara = $stmtListAcara->fetchAll();
+
+    if (!$selected_acara_id && count($list_acara) > 0) {
+        $selected_acara_id = $list_acara[0]['id'];
+    }
+
+    foreach ($list_acara as $acara) {
+        if ($acara['id'] == $selected_acara_id) {
+            $active_acara = $acara;
+            break;
+        }
+    }
+
+    if ($selected_acara_id) {
+        $presensiStmt = $pdo->prepare("SELECT * FROM presensi WHERE acara_id = ? ORDER BY waktu_absen DESC");
+        $presensiStmt->execute([$selected_acara_id]);
+        $data_presensi = $presensiStmt->fetchAll();
+    }
+    $total_hadir = count($data_presensi);
 }
-$total_hadir = count($data_presensi);
 
 // ----------------------------------------------------
-// DATA TAB 2: PRESENSI APEL (PAGI / SORE)
+// DATA TAB 2: PRESENSI APEL (PAGI / SORE) (Jika tab apel)
 // ----------------------------------------------------
 $sesi_filter  = $_GET['sesi'] ?? 'semua';
 $tgl_mulai    = $_GET['tgl_mulai'] ?? '';
 $tgl_selesai  = $_GET['tgl_selesai'] ?? '';
 $apel_user_id = (int)($_GET['apel_user_id'] ?? 0);
+$data_presensi_apel = [];
+$total_apel = 0;
 
-$sqlApel = "SELECT * FROM presensi_apel WHERE 1=1";
-$paramsApel = [];
+if ($active_tab === 'apel') {
+    $sqlApel = "SELECT * FROM presensi_apel WHERE 1=1";
+    $paramsApel = [];
 
-if (in_array($sesi_filter, ['pagi', 'sore'], true)) {
-    $sqlApel .= " AND sesi = ?";
-    $paramsApel[] = $sesi_filter;
-}
-if (!empty($tgl_mulai)) {
-    $sqlApel .= " AND tanggal >= ?";
-    $paramsApel[] = $tgl_mulai;
-}
-if (!empty($tgl_selesai)) {
-    $sqlApel .= " AND tanggal <= ?";
-    $paramsApel[] = $tgl_selesai;
-}
-if ($apel_user_id > 0) {
-    // Ambil nama user untuk fallback jika user_id di presensi_apel NULL
-    $stmtUFilter = $pdo->prepare("SELECT nama FROM users WHERE id = ? LIMIT 1");
-    $stmtUFilter->execute([$apel_user_id]);
-    $uFilterRow = $stmtUFilter->fetch();
-    $uFilterNama = $uFilterRow ? $uFilterRow['nama'] : '';
+    if (in_array($sesi_filter, ['pagi', 'sore'], true)) {
+        $sqlApel .= " AND sesi = ?";
+        $paramsApel[] = $sesi_filter;
+    }
+    if (!empty($tgl_mulai)) {
+        $sqlApel .= " AND tanggal >= ?";
+        $paramsApel[] = $tgl_mulai;
+    }
+    if (!empty($tgl_selesai)) {
+        $sqlApel .= " AND tanggal <= ?";
+        $paramsApel[] = $tgl_selesai;
+    }
+    if ($apel_user_id > 0) {
+        // Cari nama user dari list_users yang sudah diambil
+        $uFilterNama = '';
+        foreach ($list_users as $lu) {
+            if ($lu['id'] == $apel_user_id) {
+                $uFilterNama = $lu['nama'];
+                break;
+            }
+        }
+        $sqlApel .= " AND (user_id = ? OR nama = ?)";
+        $paramsApel[] = $apel_user_id;
+        $paramsApel[] = $uFilterNama;
+    }
 
-    $sqlApel .= " AND (user_id = ? OR nama = ?)";
-    $paramsApel[] = $apel_user_id;
-    $paramsApel[] = $uFilterNama;
+    $sqlApel .= " ORDER BY tanggal DESC, waktu DESC, id DESC";
+    $stmtApel = $pdo->prepare($sqlApel);
+    $stmtApel->execute($paramsApel);
+    $data_presensi_apel = $stmtApel->fetchAll();
+    $total_apel = count($data_presensi_apel);
 }
-
-$sqlApel .= " ORDER BY tanggal DESC, waktu DESC, id DESC";
-$stmtApel = $pdo->prepare($sqlApel);
-$stmtApel->execute($paramsApel);
-$data_presensi_apel = $stmtApel->fetchAll();
-$total_apel = count($data_presensi_apel);
 
 // ----------------------------------------------------
-// DATA TAB 3: ABSENSI HARIAN
+// DATA TAB 3: ABSENSI HARIAN (Jika tab harian)
 // ----------------------------------------------------
 $harian_tgl_mulai   = $_GET['harian_tgl_mulai'] ?? '';
 $harian_tgl_selesai = $_GET['harian_tgl_selesai'] ?? '';
 $harian_user_id     = (int)($_GET['harian_user_id'] ?? 0);
+$data_presensi_harian = [];
+$total_harian = 0;
 
-$sqlHarian = "SELECT h.*, u.nama, u.jabatan, u.nip FROM absensi_harian h JOIN users u ON h.user_id = u.id WHERE 1=1";
-$paramsHarian = [];
+if ($active_tab === 'harian') {
+    $sqlHarian = "SELECT h.*, u.nama, u.jabatan, u.nip FROM absensi_harian h JOIN users u ON h.user_id = u.id WHERE 1=1";
+    $paramsHarian = [];
 
-if (!empty($harian_tgl_mulai)) {
-    $sqlHarian .= " AND h.tanggal >= ?";
-    $paramsHarian[] = $harian_tgl_mulai;
-}
-if (!empty($harian_tgl_selesai)) {
-    $sqlHarian .= " AND h.tanggal <= ?";
-    $paramsHarian[] = $harian_tgl_selesai;
-}
-if ($harian_user_id > 0) {
-    $sqlHarian .= " AND h.user_id = ?";
-    $paramsHarian[] = $harian_user_id;
-}
+    if (!empty($harian_tgl_mulai)) {
+        $sqlHarian .= " AND h.tanggal >= ?";
+        $paramsHarian[] = $harian_tgl_mulai;
+    }
+    if (!empty($harian_tgl_selesai)) {
+        $sqlHarian .= " AND h.tanggal <= ?";
+        $paramsHarian[] = $harian_tgl_selesai;
+    }
+    if ($harian_user_id > 0) {
+        $sqlHarian .= " AND h.user_id = ?";
+        $paramsHarian[] = $harian_user_id;
+    }
 
-$sqlHarian .= " ORDER BY h.tanggal DESC, h.waktu_checkin DESC, h.id DESC";
-$stmtHarian = $pdo->prepare($sqlHarian);
-$stmtHarian->execute($paramsHarian);
-$data_presensi_harian = $stmtHarian->fetchAll();
-$total_harian = count($data_presensi_harian);
+    $sqlHarian .= " ORDER BY h.tanggal DESC, h.waktu_checkin DESC, h.id DESC";
+    $stmtHarian = $pdo->prepare($sqlHarian);
+    $stmtHarian->execute($paramsHarian);
+    $data_presensi_harian = $stmtHarian->fetchAll();
+    $total_harian = count($data_presensi_harian);
+}
 
 // ----------------------------------------------------
-// DATA TAB 4: REKAP BULANAN & DAFTAR TIDAK HADIR
+// DATA TAB 4: REKAP BULANAN & DAFTAR TIDAK HADIR (Jika tab rekap)
 // ----------------------------------------------------
 $rekap_bulan = $_GET['rekap_bulan'] ?? date('Y-m');
 if (!preg_match('/^\d{4}-\d{2}$/', $rekap_bulan)) {
     $rekap_bulan = date('Y-m');
 }
 $rekap_tgl_absent = $_GET['rekap_tgl_absent'] ?? date('Y-m-d');
+$data_rekap_pegawai = [];
+$data_absent_apel = [];
 
-// Query Rekap Kehadiran Per Pegawai
-$stmtRekap = $pdo->prepare("
-    SELECT u.id, u.nip, u.nama, u.jabatan,
-        (SELECT COUNT(*) FROM presensi_apel a WHERE (a.user_id = u.id OR a.nama = u.nama) AND a.sesi = 'pagi' AND a.tanggal LIKE ?) AS total_pagi,
-        (SELECT COUNT(*) FROM presensi_apel a WHERE (a.user_id = u.id OR a.nama = u.nama) AND a.sesi = 'sore' AND a.tanggal LIKE ?) AS total_sore,
-        (SELECT COUNT(*) FROM presensi r WHERE (r.user_id = u.id OR r.nama = u.nama) AND r.waktu_absen LIKE ?) AS total_rapat,
-        (SELECT COUNT(*) FROM absensi_harian h WHERE h.user_id = u.id AND h.tanggal LIKE ?) AS total_harian
-    FROM users u
-    ORDER BY u.nama ASC
-");
-$likeBulan = $rekap_bulan . '-%';
-$stmtRekap->execute([$likeBulan, $likeBulan, $likeBulan, $likeBulan]);
-$data_rekap_pegawai = $stmtRekap->fetchAll();
+if ($active_tab === 'rekap') {
+    $likeBulan = $rekap_bulan . '-%';
 
-// Query Pegawai Tidak Hadir Apel pada tanggal tertentu
-$stmtAbsentApel = $pdo->prepare("
-    SELECT u.id, u.nip, u.nama, u.jabatan
-    FROM users u
-    WHERE u.is_active = 1 AND u.id NOT IN (
-        SELECT DISTINCT user_id FROM presensi_apel WHERE tanggal = ? AND user_id IS NOT NULL
-    ) AND u.nama NOT IN (
-        SELECT DISTINCT nama FROM presensi_apel WHERE tanggal = ?
-    )
-    ORDER BY u.nama ASC
-");
-$stmtAbsentApel->execute([$rekap_tgl_absent, $rekap_tgl_absent]);
-$data_absent_apel = $stmtAbsentApel->fetchAll();
-
-// ----------------------------------------------------
-// DATA TAB 5: KELOLA USERS / PEGAWAI
-// ----------------------------------------------------
-$stmtUsers = $pdo->query("SELECT * FROM users ORDER BY nama ASC");
-$list_users = $stmtUsers->fetchAll();
-$total_users = count($list_users);
-
-// ----------------------------------------------------
-// LOGIKA GANTI PASSWORD ADMIN & LOG AKTIVITAS & GRAFIK
-// ----------------------------------------------------
-$change_pass_msg = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_change_admin_pass'])) {
-    $old_pass = $_POST['old_password'] ?? '';
-    $new_pass = $_POST['new_password'] ?? '';
-    $confirm_pass = $_POST['confirm_password'] ?? '';
-
-    if (!empty($old_pass) && !empty($new_pass) && !empty($confirm_pass)) {
-        if ($new_pass !== $confirm_pass) {
-            $change_pass_msg = 'error_confirm';
-        } else {
-            $admin_id = $_SESSION['admin_id'] ?? 0;
-            $stmtAdm = $pdo->prepare("SELECT password FROM admin WHERE id = ? LIMIT 1");
-            $stmtAdm->execute([$admin_id]);
-            $admData = $stmtAdm->fetch();
-
-            if ($admData && password_verify($old_pass, $admData['password'])) {
-                $newHash = password_hash($new_pass, PASSWORD_DEFAULT);
-                $stmtUp = $pdo->prepare("UPDATE admin SET password = ? WHERE id = ?");
-                $stmtUp->execute([$newHash, $admin_id]);
-                logAdminActivity($pdo, 'Ganti Password Admin', 'Admin mengubah password akun sendiri');
-                $change_pass_msg = 'success';
-            } else {
-                $change_pass_msg = 'error_old';
-            }
+    // Hitung rekap apel pagi & sore dalam 1 agregasi
+    $apelAggStmt = $pdo->prepare("
+        SELECT IFNULL(user_id, 0) AS uid, nama,
+               SUM(CASE WHEN sesi = 'pagi' THEN 1 ELSE 0 END) AS cnt_pagi,
+               SUM(CASE WHEN sesi = 'sore' THEN 1 ELSE 0 END) AS cnt_sore
+        FROM presensi_apel
+        WHERE tanggal LIKE ?
+        GROUP BY user_id, nama
+    ");
+    $apelAggStmt->execute([$likeBulan]);
+    $apelAgg = $apelAggStmt->fetchAll();
+    $pagiByUser = []; $pagiByNama = [];
+    $soreByUser = []; $soreByNama = [];
+    foreach ($apelAgg as $r) {
+        if ($r['uid'] > 0) {
+            $pagiByUser[$r['uid']] = ($pagiByUser[$r['uid']] ?? 0) + (int)$r['cnt_pagi'];
+            $soreByUser[$r['uid']] = ($soreByUser[$r['uid']] ?? 0) + (int)$r['cnt_sore'];
         }
-    } else {
-        $change_pass_msg = 'error_empty';
+        if (!empty($r['nama'])) {
+            $pagiByNama[$r['nama']] = ($pagiByNama[$r['nama']] ?? 0) + (int)$r['cnt_pagi'];
+            $soreByNama[$r['nama']] = ($soreByNama[$r['nama']] ?? 0) + (int)$r['cnt_sore'];
+        }
     }
+
+    // Hitung rekap rapat
+    $rapatAggStmt = $pdo->prepare("
+        SELECT IFNULL(user_id, 0) AS uid, nama, COUNT(*) AS cnt_rapat
+        FROM presensi
+        WHERE waktu_absen LIKE ?
+        GROUP BY user_id, nama
+    ");
+    $rapatAggStmt->execute([$likeBulan]);
+    $rapatAgg = $rapatAggStmt->fetchAll();
+    $rapatByUser = []; $rapatByNama = [];
+    foreach ($rapatAgg as $r) {
+        if ($r['uid'] > 0) {
+            $rapatByUser[$r['uid']] = ($rapatByUser[$r['uid']] ?? 0) + (int)$r['cnt_rapat'];
+        }
+        if (!empty($r['nama'])) {
+            $rapatByNama[$r['nama']] = ($rapatByNama[$r['nama']] ?? 0) + (int)$r['cnt_rapat'];
+        }
+    }
+
+    // Hitung rekap harian
+    $harianAggStmt = $pdo->prepare("
+        SELECT user_id, COUNT(*) AS cnt_harian
+        FROM absensi_harian
+        WHERE tanggal LIKE ?
+        GROUP BY user_id
+    ");
+    $harianAggStmt->execute([$likeBulan]);
+    $harianByUser = [];
+    foreach ($harianAggStmt->fetchAll() as $r) {
+        $harianByUser[$r['user_id']] = (int)$r['cnt_harian'];
+    }
+
+    foreach ($list_users as $u) {
+        $uid = $u['id'];
+        $uName = $u['nama'];
+        $data_rekap_pegawai[] = [
+            'id'           => $uid,
+            'nip'          => $u['nip'],
+            'nama'         => $uName,
+            'jabatan'      => $u['jabatan'],
+            'total_pagi'   => $pagiByUser[$uid] ?? $pagiByNama[$uName] ?? 0,
+            'total_sore'   => $soreByUser[$uid] ?? $soreByNama[$uName] ?? 0,
+            'total_rapat'  => $rapatByUser[$uid] ?? $rapatByNama[$uName] ?? 0,
+            'total_harian' => $harianByUser[$uid] ?? 0,
+        ];
+    }
+
+    // Query Pegawai Tidak Hadir Apel pada tanggal tertentu
+    $stmtAbsentApel = $pdo->prepare("
+        SELECT u.id, u.nip, u.nama, u.jabatan
+        FROM users u
+        WHERE u.is_active = 1 AND u.id NOT IN (
+            SELECT DISTINCT user_id FROM presensi_apel WHERE tanggal = ? AND user_id IS NOT NULL
+        ) AND u.nama NOT IN (
+            SELECT DISTINCT nama FROM presensi_apel WHERE tanggal = ?
+        )
+        ORDER BY u.nama ASC
+    ");
+    $stmtAbsentApel->execute([$rekap_tgl_absent, $rekap_tgl_absent]);
+    $data_absent_apel = $stmtAbsentApel->fetchAll();
 }
 
-// Data Log Aktivitas (20 Terakhir)
-$stmtLogs = $pdo->query("SELECT * FROM log_aktivitas ORDER BY id DESC LIMIT 20");
-$list_logs = $stmtLogs->fetchAll();
-
-// Data Grafik Kehadiran 7 Hari Terakhir
+// ----------------------------------------------------
+// LOGIKA GANTI PASSWORD ADMIN & LOG AKTIVITAS & GRAFIK (Jika tab pengaturan)
+// ----------------------------------------------------
+$change_pass_msg = '';
+$list_logs = [];
 $chart_dates = [];
 $chart_apel_data = [];
 $chart_harian_data = [];
 
-for ($i = 6; $i >= 0; $i--) {
-    $d = date('Y-m-d', strtotime("-$i days"));
-    $chart_dates[] = date('d/m', strtotime($d));
-    
-    // Apel count
-    $stA = $pdo->prepare("SELECT COUNT(*) FROM presensi_apel WHERE tanggal = ?");
-    $stA->execute([$d]);
-    $chart_apel_data[] = (int)$stA->fetchColumn();
+if ($active_tab === 'pengaturan') {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_change_admin_pass'])) {
+        $old_pass = $_POST['old_password'] ?? '';
+        $new_pass = $_POST['new_password'] ?? '';
+        $confirm_pass = $_POST['confirm_password'] ?? '';
 
-    // Harian count
-    $stH = $pdo->prepare("SELECT COUNT(*) FROM absensi_harian WHERE tanggal = ?");
-    $stH->execute([$d]);
-    $chart_harian_data[] = (int)$stH->fetchColumn();
+        if (!empty($old_pass) && !empty($new_pass) && !empty($confirm_pass)) {
+            if ($new_pass !== $confirm_pass) {
+                $change_pass_msg = 'error_confirm';
+            } else {
+                $admin_id = $_SESSION['admin_id'] ?? 0;
+                $stmtAdm = $pdo->prepare("SELECT password FROM admin WHERE id = ? LIMIT 1");
+                $stmtAdm->execute([$admin_id]);
+                $admData = $stmtAdm->fetch();
+
+                if ($admData && password_verify($old_pass, $admData['password'])) {
+                    $newHash = password_hash($new_pass, PASSWORD_DEFAULT);
+                    $stmtUp = $pdo->prepare("UPDATE admin SET password = ? WHERE id = ?");
+                    $stmtUp->execute([$newHash, $admin_id]);
+                    logAdminActivity($pdo, 'Ganti Password Admin', 'Admin mengubah password akun sendiri');
+                    $change_pass_msg = 'success';
+                } else {
+                    $change_pass_msg = 'error_old';
+                }
+            }
+        } else {
+            $change_pass_msg = 'error_empty';
+        }
+    }
+
+    // Data Log Aktivitas (20 Terakhir)
+    $stmtLogs = $pdo->query("SELECT * FROM log_aktivitas ORDER BY id DESC LIMIT 20");
+    $list_logs = $stmtLogs->fetchAll();
+
+    // Data Grafik Kehadiran 7 Hari Terakhir
+    $chart_days_map = [];
+    for ($i = 6; $i >= 0; $i--) {
+        $d = date('Y-m-d', strtotime("-$i days"));
+        $chart_dates[] = date('d/m', strtotime($d));
+        $chart_days_map[$d] = count($chart_dates) - 1;
+        $chart_apel_data[] = 0;
+        $chart_harian_data[] = 0;
+    }
+
+    $startDate7 = date('Y-m-d', strtotime("-6 days"));
+    $endDate7   = date('Y-m-d');
+
+    $stApelGroup = $pdo->prepare("SELECT tanggal, COUNT(*) as cnt FROM presensi_apel WHERE tanggal >= ? AND tanggal <= ? GROUP BY tanggal");
+    $stApelGroup->execute([$startDate7, $endDate7]);
+    foreach ($stApelGroup->fetchAll() as $rowA) {
+        if (isset($chart_days_map[$rowA['tanggal']])) {
+            $chart_apel_data[$chart_days_map[$rowA['tanggal']]] = (int)$rowA['cnt'];
+        }
+    }
+
+    $stHarianGroup = $pdo->prepare("SELECT tanggal, COUNT(*) as cnt FROM absensi_harian WHERE tanggal >= ? AND tanggal <= ? GROUP BY tanggal");
+    $stHarianGroup->execute([$startDate7, $endDate7]);
+    foreach ($stHarianGroup->fetchAll() as $rowH) {
+        if (isset($chart_days_map[$rowH['tanggal']])) {
+            $chart_harian_data[$chart_days_map[$rowH['tanggal']]] = (int)$rowH['cnt'];
+        }
+    }
 }
 
 $msg = $_GET['msg'] ?? '';
@@ -240,9 +332,6 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
     <link href="../assets/css/inter.css" rel="stylesheet">
     <!-- Bootstrap 5 CSS (lokal) -->
     <link href="../assets/css/bootstrap.min.css" rel="stylesheet">
-    <!-- SheetJS & Chart.js (lokal) -->
-    <script src="../assets/js/xlsx.full.min.js"></script>
-    <script src="../assets/js/chart.min.js"></script>
     <style>
         /* Tab panel switching tanpa reload */
         .tab-panel { display: none; }
@@ -831,24 +920,24 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
         <div class="sidebar-menu">
             <div class="menu-section-label">Presensi & Acara</div>
             
-            <a href="#" onclick="switchTab('rapat');return false;" 
-               class="nav-item-btn" data-tab="rapat" id="nav-rapat">
+            <a href="dashboard.php?tab=rapat" 
+               class="nav-item-btn <?= $active_tab === 'rapat' ? 'active' : '' ?>" data-tab="rapat" id="nav-rapat">
                 <div class="nav-left">
                     <span class="nav-icon">📋</span>
                     <span>Presensi Rapat</span>
                 </div>
             </a>
 
-            <a href="#" onclick="switchTab('apel');return false;" 
-               class="nav-item-btn" data-tab="apel" id="nav-apel">
+            <a href="dashboard.php?tab=apel" 
+               class="nav-item-btn <?= $active_tab === 'apel' ? 'active' : '' ?>" data-tab="apel" id="nav-apel">
                 <div class="nav-left">
                     <span class="nav-icon">📣</span>
                     <span>Presensi Apel</span>
                 </div>
             </a>
 
-            <a href="#" onclick="switchTab('harian');return false;" 
-               class="nav-item-btn" data-tab="harian" id="nav-harian">
+            <a href="dashboard.php?tab=harian" 
+               class="nav-item-btn <?= $active_tab === 'harian' ? 'active' : '' ?>" data-tab="harian" id="nav-harian">
                 <div class="nav-left">
                     <span class="nav-icon">📅</span>
                     <span>Absen Harian</span>
@@ -857,16 +946,16 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
 
             <div class="menu-section-label">Laporan & Pengguna</div>
 
-            <a href="#" onclick="switchTab('rekap');return false;" 
-               class="nav-item-btn" data-tab="rekap" id="nav-rekap">
+            <a href="dashboard.php?tab=rekap" 
+               class="nav-item-btn <?= $active_tab === 'rekap' ? 'active' : '' ?>" data-tab="rekap" id="nav-rekap">
                 <div class="nav-left">
                     <span class="nav-icon">📊</span>
                     <span>Rekap & Tidak Hadir</span>
                 </div>
             </a>
 
-            <a href="#" onclick="switchTab('users');return false;" 
-               class="nav-item-btn" data-tab="users" id="nav-users">
+            <a href="dashboard.php?tab=users" 
+               class="nav-item-btn <?= $active_tab === 'users' ? 'active' : '' ?>" data-tab="users" id="nav-users">
                 <div class="nav-left">
                     <span class="nav-icon">👥</span>
                     <span>Data Pegawai</span>
@@ -876,8 +965,8 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
 
             <div class="menu-section-label">Sistem & Pengaturan</div>
 
-            <a href="#" onclick="switchTab('pengaturan');return false;" 
-               class="nav-item-btn" data-tab="pengaturan" id="nav-pengaturan">
+            <a href="dashboard.php?tab=pengaturan" 
+               class="nav-item-btn <?= $active_tab === 'pengaturan' ? 'active' : '' ?>" data-tab="pengaturan" id="nav-pengaturan">
                 <div class="nav-left">
                     <span class="nav-icon">⚙️</span>
                     <span>Pengaturan & Log</span>
@@ -1260,6 +1349,7 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
                                 <th>Jabatan</th>
                                 <th>Jam Masuk (Check-in)</th>
                                 <th>Jam Pulang (Check-out)</th>
+                                <th style="width: 100px;" class="text-center">Foto</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1284,11 +1374,20 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
                                                 <span class="text-muted font-monospace">-</span>
                                             <?php endif; ?>
                                         </td>
+                                        <td class="text-center">
+                                            <?php if (!empty($row['foto_path'])): ?>
+                                                <a href="javascript:void(0)" onclick="openPreviewFotoModal('<?= htmlspecialchars('../' . ltrim($row['foto_path'], '/')) ?>', '<?= htmlspecialchars(addslashes($row['nama'])) ?>', '<?= date('d/m/Y', strtotime($row['tanggal'])) ?>')">
+                                                    <img src="<?= htmlspecialchars('../' . ltrim($row['foto_path'], '/')) ?>" alt="Foto Absen" class="rounded border border-secondary shadow-sm" style="width: 44px; height: 44px; object-fit: cover; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+                                                </a>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary-subtle text-secondary small">Tidak Ada</span>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">Belum ada data absensi harian sesuai filter.</td>
+                                    <td colspan="7" class="text-center text-muted py-4">Belum ada data absensi harian sesuai filter.</td>
                                 </tr>
                             <?php endif; ?>
                         </tbody>
@@ -1781,8 +1880,36 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
   </div>
 </div>
 
-<!-- Bootstrap Bundle JS -->
+<!-- Modal Preview Foto Absensi Harian -->
+<div class="modal fade" id="previewFotoModal" tabindex="-1" aria-labelledby="previewFotoModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-secondary shadow-lg">
+      <div class="modal-header border-bottom border-secondary">
+        <div>
+          <h5 class="modal-title fw-bold text-white" id="previewFotoModalLabel">Dokumentasi Foto Absen</h5>
+          <small class="text-secondary" id="previewFotoModalSub"></small>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center p-3">
+        <div class="d-flex justify-content-center align-items-center bg-black rounded p-2" style="min-height: 250px; overflow: hidden;">
+          <img id="previewFotoImg" src="" alt="Foto Absen" class="img-fluid rounded" style="max-height: 480px; object-fit: contain;">
+        </div>
+      </div>
+      <div class="modal-footer border-top border-secondary justify-content-between">
+        <a id="previewFotoDownload" href="#" target="_blank" class="btn btn-sm btn-modern-outline d-inline-flex align-items-center gap-1">
+          <span>🔍</span> Lihat Ukuran Penuh
+        </a>
+        <button type="button" class="btn btn-sm btn-modern-primary" data-bs-dismiss="modal">Tutup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap Bundle JS & Libraries (Lokal) -->
 <script src="../assets/js/bootstrap.bundle.min.js"></script>
+<script src="../assets/js/chart.min.js"></script>
+<script src="../assets/js/xlsx.full.min.js"></script>
 
 <script>
 // ---------------- Dynamic Tab Switching (Tanpa Reload Halaman) ----------------
@@ -1903,6 +2030,17 @@ function openEditUserModal(user) {
     document.getElementById('edit_username').value = user.username || '';
     document.getElementById('edit_is_active').checked = (user.is_active === undefined || parseInt(user.is_active) === 1);
     var modal = new bootstrap.Modal(document.getElementById('editUserModal'));
+    modal.show();
+}
+
+function openPreviewFotoModal(fotoSrc, nama, tanggal) {
+    var imgEl = document.getElementById('previewFotoImg');
+    var subEl = document.getElementById('previewFotoModalSub');
+    var dlEl  = document.getElementById('previewFotoDownload');
+    if (imgEl) imgEl.src = fotoSrc;
+    if (subEl) subEl.textContent = nama + (tanggal ? ' (' + tanggal + ')' : '');
+    if (dlEl) dlEl.href = fotoSrc;
+    var modal = new bootstrap.Modal(document.getElementById('previewFotoModal'));
     modal.show();
 }
 
@@ -2260,6 +2398,12 @@ function connectSSE() {
 
                         const tr = document.createElement('tr');
                         tr.className = 'table-success';
+                        const fotoCell = item.foto_path ? `
+                            <a href="javascript:void(0)" onclick="openPreviewFotoModal('${escapeHtml('../' + item.foto_path.replace(/^\\/+/, ''))}', '${escapeHtml(item.nama)}', '${escapeHtml(item.tanggal)}')">
+                                <img src="${escapeHtml('../' + item.foto_path.replace(/^\\/+/, ''))}" alt="Foto Absen" class="rounded border border-secondary shadow-sm" style="width: 44px; height: 44px; object-fit: cover; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+                            </a>
+                        ` : `<span class="badge bg-secondary-subtle text-secondary small">Tidak Ada</span>`;
+
                         tr.innerHTML = `
                             <td>1</td>
                             <td>${item.tanggal}</td>
@@ -2267,6 +2411,7 @@ function connectSSE() {
                             <td>${escapeHtml(item.jabatan)}</td>
                             <td><span class="badge bg-success-subtle text-success border">${item.waktu_checkin || '-'}</span></td>
                             <td><span class="badge bg-warning-subtle text-warning border text-dark">${item.waktu_checkout || '-'}</span></td>
+                            <td class="text-center">${fotoCell}</td>
                         `;
                         tbody.insertBefore(tr, tbody.firstChild);
                         renumberTableRows('presensiHarianTable');

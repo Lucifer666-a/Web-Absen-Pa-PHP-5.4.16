@@ -61,11 +61,19 @@ try {
         `waktu_checkin`   TIME NULL,
         `waktu_checkout`  TIME NULL,
         `status_checkin`  ENUM('tepat_waktu', 'terlambat') NULL,
+        `foto_path`       VARCHAR(255) NULL,
         `created_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         `updated_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (`id`),
         UNIQUE KEY `unique_user_tanggal` (`user_id`, `tanggal`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+    // Pastikan kolom foto_path ada pada absensi_harian jika tabel sudah terbuat sebelumnya
+    try {
+        $pdo->exec("ALTER TABLE `absensi_harian` ADD COLUMN `foto_path` VARCHAR(255) NULL");
+    } catch (\PDOException $ex) {
+        // Kolom sudah ada
+    }
 
     // Pastikan kolom user_id ada pada presensi_apel jika tabel sudah terbuat sebelumnya
     try {
@@ -113,6 +121,29 @@ try {
         UNIQUE KEY `unique_jti` (`token_jti`),
         KEY `idx_expires` (`expires_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+    // Pastikan index performa ada pada tabel presensi dan absensi
+    try {
+        $pdo->exec("CREATE INDEX idx_apel_tanggal ON presensi_apel (tanggal)");
+    } catch (\PDOException $ex) {}
+    try {
+        $pdo->exec("CREATE INDEX idx_apel_user ON presensi_apel (user_id)");
+    } catch (\PDOException $ex) {}
+    try {
+        $pdo->exec("CREATE INDEX idx_apel_sesi ON presensi_apel (sesi)");
+    } catch (\PDOException $ex) {}
+    try {
+        $pdo->exec("CREATE INDEX idx_harian_tanggal ON absensi_harian (tanggal)");
+    } catch (\PDOException $ex) {}
+    try {
+        $pdo->exec("CREATE INDEX idx_presensi_acara ON presensi (acara_id)");
+    } catch (\PDOException $ex) {}
+    try {
+        $pdo->exec("CREATE INDEX idx_presensi_user ON presensi (user_id)");
+    } catch (\PDOException $ex) {}
+    try {
+        $pdo->exec("CREATE INDEX idx_presensi_waktu ON presensi (waktu_absen)");
+    } catch (\PDOException $ex) {}
 
 } catch (\PDOException $e) {
     die("Koneksi Database Gagal: " . $e->getMessage());
