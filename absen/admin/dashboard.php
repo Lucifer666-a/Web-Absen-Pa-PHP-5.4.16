@@ -1093,7 +1093,7 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
             <!-- ================= KONTEN TAB (semua di-render, switch via JS) ================= -->
             <div class="table-wrapper">
                 <?php /* TAB 1: RAPAT */ ?>
-                <div class="tab-panel" id="panel-rapat">
+                <div class="tab-panel <?= $active_tab === 'rapat' ? 'active-panel' : '' ?>" id="panel-rapat">
                     <!-- ================= TAB 1: PRESENSI RAPAT ================= -->
                     <div class="row mb-4 align-items-center">
                         <div class="col-md-6 mb-2 mb-md-0">
@@ -2044,107 +2044,30 @@ function openPreviewFotoModal(fotoSrc, nama, tanggal) {
     modal.show();
 }
 
-// ---------------- Export Excel Handlers ----------------
+// ---------------- Export Excel Handlers (Server-Side with Image Embedding) ----------------
 function exportToExcel() {
-    var table = document.getElementById("presensiTable");
-    if (!table) return;
-    
-    var wb = XLSX.utils.book_new();
-    var wsData = [];
-    
-    wsData.push(["REKAP PRESENSI RAPAT / ACARA"]);
-    wsData.push(["Nama Acara: <?= $active_acara ? addslashes(htmlspecialchars($active_acara['nama_acara'])) : '-' ?>"]);
-    wsData.push(["PIN Acara: <?= $active_acara ? addslashes(htmlspecialchars($active_acara['pin_acara'])) : '-' ?> | Status: <?= $active_acara ? $active_acara['status'] : '-' ?>"]);
-    wsData.push(["Tanggal Cetak: " + new Date().toLocaleDateString('id-ID')]);
-    wsData.push([]);
-    
-    wsData.push(["No", "Waktu Absen", "Nama Pegawai", "Jabatan", "Status Tanda Tangan"]);
-    
-    for (var i = 1; i < table.rows.length; i++) {
-        var row = table.rows[i];
-        if (row.cells.length < 4) continue;
-        var no = row.cells[0].innerText.trim();
-        var waktu = row.cells[1].innerText.trim();
-        var nama = row.cells[2].innerText.trim();
-        var jabatan = row.cells[3].innerText.trim();
-        var hasSign = row.cells[4] && row.cells[4].querySelector('img') ? "Ada Tanda Tangan (Digital)" : "-";
-        wsData.push([no, waktu, nama, jabatan, hasSign]);
-    }
-    
-    wsData.push([]);
-    wsData.push(["* Catatan: Data presensi ini berasal dari konfirmasi pegawai melalui aplikasi Android, bukan pengganti presensi resmi."]);
-    
-    var ws = XLSX.utils.aoa_to_sheet(wsData);
-    XLSX.utils.book_append_sheet(wb, ws, "Presensi Rapat");
-    XLSX.writeFile(wb, "Rekap_Presensi_Rapat_<?= $active_acara ? preg_replace('/[^A-Za-z0-9\-]/', '_', $active_acara['nama_acara']) : 'Acara' ?>.xlsx");
+    var acaraSelect = document.querySelector('select[name="acara_id"]');
+    var acaraId = acaraSelect ? acaraSelect.value : '<?= (int)($selected_acara_id ?? 0) ?>';
+    window.location.href = 'export_excel.php?type=rapat&acara_id=' + encodeURIComponent(acaraId);
 }
 
 function exportApelToExcel() {
-    var table = document.getElementById("presensiApelTable");
-    if (!table) return;
-    
-    var wb = XLSX.utils.book_new();
-    var wsData = [];
-    
-    wsData.push(["REKAP PRESENSI APEL (PAGI / SORE)"]);
-    wsData.push(["Filter Sesi: <?= htmlspecialchars($sesi_filter) ?> | Periode: <?= htmlspecialchars($tgl_mulai ?: 'Semua') ?> s/d <?= htmlspecialchars($tgl_selesai ?: 'Semua') ?>"]);
-    wsData.push(["Tanggal Cetak: " + new Date().toLocaleDateString('id-ID')]);
-    wsData.push([]);
-    
-    wsData.push(["No", "Tanggal & Jam", "Sesi Apel", "Nama Pegawai", "Jabatan", "Status Tanda Tangan"]);
-    
-    for (var i = 1; i < table.rows.length; i++) {
-        var row = table.rows[i];
-        if (row.cells.length < 5) continue;
-        var no = row.cells[0].innerText.trim();
-        var tgl = row.cells[1].innerText.trim();
-        var sesi = row.cells[2].innerText.trim();
-        var nama = row.cells[3].innerText.trim();
-        var jabatan = row.cells[4].innerText.trim();
-        var hasSign = row.cells[5] && row.cells[5].querySelector('img') ? "Ada Tanda Tangan (Digital)" : "-";
-        wsData.push([no, tgl, sesi, nama, jabatan, hasSign]);
-    }
-    
-    wsData.push([]);
-    wsData.push(["* Catatan: Data presensi apel ini berasal dari konfirmasi pegawai melalui aplikasi Android, bukan pengganti presensi resmi."]);
-    
-    var ws = XLSX.utils.aoa_to_sheet(wsData);
-    XLSX.utils.book_append_sheet(wb, ws, "Presensi Apel");
-    XLSX.writeFile(wb, "Rekap_Presensi_Apel_<?= htmlspecialchars($sesi_filter) ?>_<?= date('Y-m-d') ?>.xlsx");
+    var params = new URLSearchParams();
+    params.set('type', 'apel');
+    params.set('sesi', '<?= htmlspecialchars($sesi_filter) ?>');
+    params.set('tgl_mulai', '<?= htmlspecialchars($tgl_mulai) ?>');
+    params.set('tgl_selesai', '<?= htmlspecialchars($tgl_selesai) ?>');
+    params.set('apel_user_id', '<?= (int)$apel_user_id ?>');
+    window.location.href = 'export_excel.php?' + params.toString();
 }
 
 function exportHarianToExcel() {
-    var table = document.getElementById("presensiHarianTable");
-    if (!table) return;
-    
-    var wb = XLSX.utils.book_new();
-    var wsData = [];
-    
-    wsData.push(["REKAP ABSENSI HARIAN"]);
-    wsData.push(["Periode: <?= htmlspecialchars($harian_tgl_mulai ?: 'Semua') ?> s/d <?= htmlspecialchars($harian_tgl_selesai ?: 'Semua') ?>"]);
-    wsData.push(["Tanggal Cetak: " + new Date().toLocaleDateString('id-ID')]);
-    wsData.push([]);
-    
-    wsData.push(["No", "Tanggal", "Nama Pegawai", "Jabatan", "Jam Masuk (Check-in)", "Jam Pulang (Check-out)"]);
-    
-    for (var i = 1; i < table.rows.length; i++) {
-        var row = table.rows[i];
-        if (row.cells.length < 6) continue;
-        var no = row.cells[0].innerText.trim();
-        var tgl = row.cells[1].innerText.trim();
-        var nama = row.cells[2].innerText.trim();
-        var jabatan = row.cells[3].innerText.trim();
-        var inTime = row.cells[4].innerText.trim();
-        var outTime = row.cells[5].innerText.trim();
-        wsData.push([no, tgl, nama, jabatan, inTime, outTime]);
-    }
-    
-    wsData.push([]);
-    wsData.push(["* Catatan: Data absensi harian ini berasal dari konfirmasi pegawai melalui aplikasi Android, bukan pengganti presensi resmi."]);
-    
-    var ws = XLSX.utils.aoa_to_sheet(wsData);
-    XLSX.utils.book_append_sheet(wb, ws, "Absensi Harian");
-    XLSX.writeFile(wb, "Rekap_Absensi_Harian_<?= date('Y-m-d') ?>.xlsx");
+    var params = new URLSearchParams();
+    params.set('type', 'harian');
+    params.set('harian_tgl_mulai', '<?= htmlspecialchars($harian_tgl_mulai) ?>');
+    params.set('harian_tgl_selesai', '<?= htmlspecialchars($harian_tgl_selesai) ?>');
+    params.set('harian_user_id', '<?= (int)$harian_user_id ?>');
+    window.location.href = 'export_excel.php?' + params.toString();
 }
 
 // ---------------- Inisialisasi Grafik Chart.js ----------------
@@ -2399,8 +2322,8 @@ function connectSSE() {
                         const tr = document.createElement('tr');
                         tr.className = 'table-success';
                         const fotoCell = item.foto_path ? `
-                            <a href="javascript:void(0)" onclick="openPreviewFotoModal('${escapeHtml('../' + item.foto_path.replace(/^\\/+/, ''))}', '${escapeHtml(item.nama)}', '${escapeHtml(item.tanggal)}')">
-                                <img src="${escapeHtml('../' + item.foto_path.replace(/^\\/+/, ''))}" alt="Foto Absen" class="rounded border border-secondary shadow-sm" style="width: 44px; height: 44px; object-fit: cover; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+                            <a href="javascript:void(0)" onclick="openPreviewFotoModal('${escapeHtml('../' + item.foto_path.replace(/^[\\\/]+/, ''))}', '${escapeHtml(item.nama)}', '${escapeHtml(item.tanggal)}')">
+                                <img src="${escapeHtml('../' + item.foto_path.replace(/^[\\\/]+/, ''))}" alt="Foto Absen" class="rounded border border-secondary shadow-sm" style="width: 44px; height: 44px; object-fit: cover; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
                             </a>
                         ` : `<span class="badge bg-secondary-subtle text-secondary small">Tidak Ada</span>`;
 

@@ -190,11 +190,32 @@ langsung dari kode.
 
 ---
 
+---
+
+## ✅ Issue #18 — Embed Gambar Tanda Tangan Nyata ke Export Excel
+
+**File:** `absen/admin/export_excel.php`, `absen/admin/dashboard.php`, `composer.json`
+
+### Yang dikerjakan:
+
+1. **Instalasi PhpSpreadsheet**: Menambahkan dependency `phpoffice/phpspreadsheet` via Composer dan mengaktifkan ekstensi PHP `gd` dan `zip`.
+2. **Endpoint Server-Side (`admin/export_excel.php`)**:
+   - Menghasilkan file Excel `.xlsx` menggunakan `PhpOffice\PhpSpreadsheet\Spreadsheet`.
+   - Mengambil data presensi (Rapat, Apel, Absen Harian) langsung dari database.
+   - Mendekode data Base64 tanda tangan pegawai menjadi gambar nyata dan menanamkannya langsung ke dalam sel kolom "Tanda Tangan" menggunakan `PhpOffice\PhpSpreadsheet\Worksheet\Drawing`.
+   - Memformat header tebal dengan background warna elegan, borders, alignment rapi, judul dokumen, metadata filter/acara, serta catatan kaki administratif resmi.
+   - Membersihkan file temporary gambar secara otomatis setelah proses unduh selesai (`register_shutdown_function`).
+3. **Pembaruan Dashboard (`admin/dashboard.php`)**:
+   - Menghubungkan tombol Download Excel pada tab Rapat, Apel, dan Absen Harian langsung ke endpoint server-side `export_excel.php` dengan parameter filter yang sesuai.
+
+---
+
 ## Ringkasan File yang Diubah
 
 | File | Issue |
 |---|---|
-| `absen/admin/dashboard.php` | #8, #9, #11, #12, #14, #15, #17 |
+| `absen/admin/dashboard.php` | #8, #9, #11, #12, #14, #15, #17, #18 |
+| `absen/admin/export_excel.php` | #18 (Baru) |
 | `absen/admin/manage_users.php` | #10, #17 |
 | `absen/admin/manage_acara.php` | #17 |
 | `absen/admin/login.php` | #10, #16, #17 |
@@ -212,4 +233,4 @@ langsung dari kode.
 
 ---
 
-*Terakhir diperbarui: 08 Oktober 2026.*
+*Terakhir diperbarui: 06 Oktober 2026.*
