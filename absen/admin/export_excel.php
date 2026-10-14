@@ -96,6 +96,30 @@ function addKopSuratToSheet($sheet, string $maxCol = 'F'): int {
     return 1;
 }
 
+/**
+ * Tanda tangan mengetahui Ketua Pengadilan Agama di pojok kanan bawah
+ */
+function addTandaTanganKetua($sheet, int $startRow, string $col = 'D'): int {
+    $row = $startRow + 2; // Spasi pemisah
+
+    $sheet->setCellValue("{$col}{$row}", 'Mengetahui,');
+    $sheet->getStyle("{$col}{$row}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
+    $row++;
+
+    $sheet->setCellValue("{$col}{$row}", 'KETUA PENGADILAN AGAMA PALEMBANG KELAS IA');
+    $sheet->getStyle("{$col}{$row}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
+    $row += 4; // Beri ruang tanda tangan fisik ketua
+
+    $sheet->setCellValue("{$col}{$row}", 'MURSYID SYAH, S.Ag.');
+    $sheet->getStyle("{$col}{$row}")->getFont()->setName('Arial')->setSize(10)->setBold(true)->setUnderline(true);
+    $row++;
+
+    $sheet->setCellValue("{$col}{$row}", 'NIP. 197111251998031005');
+    $sheet->getStyle("{$col}{$row}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
+
+    return $row;
+}
+
 $spreadsheet = new Spreadsheet();
 $sheet = $spreadsheet->getActiveSheet();
 $sheet->setShowGridLines(true);
@@ -258,9 +282,12 @@ if ($type === 'rapat') {
         $currentRow++;
     }
 
+    // Tanda Tangan Mengetahui Ketua Pengadilan Agama
+    $currentRow = addTandaTanganKetua($sheet, $currentRow, 'D');
+
     // Catatan Kaki
-    $currentRow++;
-    $sheet->setCellValue("A{$currentRow}", '* Catatan: Data presensi ini sah dan berasal dari konfirmasi presensi pegawai via aplikasi Android.');
+    $currentRow += 2;
+    $sheet->setCellValue("A{$currentRow}", '* Catatan: Data presensi ini sah dan berasal dari konfirmasi presensi pegawai via aplikasi Android / Web.');
     $sheet->getStyle("A{$currentRow}")->getFont()->setItalic(true)->setSize(9)->getColor()->setRGB('6B7280');
 
     // Lebar Kolom
@@ -467,23 +494,7 @@ if ($type === 'rapat') {
     }
 
     // Bagian Mengetahui / Footer persis template ABSEN apel.xlsx
-    $currentRow += 2; // Beri jarak 2 baris kosong
-    $ttdCol = 'D';
-
-    $sheet->setCellValue("{$ttdCol}{$currentRow}", 'Mengetahui,');
-    $sheet->getStyle("{$ttdCol}{$currentRow}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
-    $currentRow++;
-
-    $sheet->setCellValue("{$ttdCol}{$currentRow}", 'KETUA PENGADILAN AGAMA PALEMBANG KELAS IA');
-    $sheet->getStyle("{$ttdCol}{$currentRow}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
-    $currentRow += 4; // Beri ruang tanda tangan fisik ketua
-
-    $sheet->setCellValue("{$ttdCol}{$currentRow}", 'MURSYID SYAH, S.Ag.');
-    $sheet->getStyle("{$ttdCol}{$currentRow}")->getFont()->setName('Arial')->setSize(10)->setBold(true)->setUnderline(true);
-    $currentRow++;
-
-    $sheet->setCellValue("{$ttdCol}{$currentRow}", 'NIP. 197111251998031005');
-    $sheet->getStyle("{$ttdCol}{$currentRow}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
+    $currentRow = addTandaTanganKetua($sheet, $currentRow, 'D');
 
     // Set Lebar Kolom yang proporsional mengikuti ABSEN apel.xlsx
     $sheet->getColumnDimension('A')->setWidth(6);
@@ -606,8 +617,12 @@ if ($type === 'rapat') {
         $currentRow++;
     }
 
-    $currentRow++;
-    $sheet->setCellValue("A{$currentRow}", '* Catatan: Data absensi harian ini sah dan berasal dari konfirmasi presensi pegawai via aplikasi Android.');
+    // Tanda Tangan Mengetahui Ketua Pengadilan Agama (Kolom F agar pas di sisi kanan tabel A-H)
+    $currentRow = addTandaTanganKetua($sheet, $currentRow, 'F');
+
+    // Catatan Kaki
+    $currentRow += 2;
+    $sheet->setCellValue("A{$currentRow}", '* Catatan: Data absensi harian ini sah dan berasal dari konfirmasi presensi pegawai via aplikasi Android / Web.');
     $sheet->getStyle("A{$currentRow}")->getFont()->setItalic(true)->setSize(9)->getColor()->setRGB('6B7280');
 
     // Column widths
