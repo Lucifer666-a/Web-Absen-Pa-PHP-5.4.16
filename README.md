@@ -234,3 +234,35 @@ langsung dari kode.
 ---
 
 *Terakhir diperbarui: 06 Oktober 2026.*
+---
+
+## ?? Issue #33 — [OPEN] Buat Tampilan Web Absensi Simpel: Absen Apel & Absen Rapat
+
+**Labels:** `enhancement`, `frontend`, `backend`, `UX`, `priority: medium`
+**Link:** https://github.com/Lucifer666-a/Web_Absen_Pa/issues/33
+
+### Deskripsi Singkat:
+
+Membuat halaman web absensi berbasis browser (bukan Android) yang simpel dan terhubung langsung ke database db_absen yang sudah ada.
+
+### Fitur yang akan dibangun:
+
+| File Baru | Fungsi |
+|---|---|
+| absen/web/index.php | Halaman landing: pilih Absen Apel atau Absen Rapat |
+| absen/web/absen_apel.php | Form absen apel pagi/sore + canvas tanda tangan |
+| absen/web/proses_apel.php | Handler POST: validasi & INSERT ke tabel presensi_apel |
+| absen/web/absen_rapat.php | Form absen rapat: pilih acara aktif + PIN + tanda tangan |
+| absen/web/proses_rapat.php | Handler POST: validasi PIN & INSERT ke tabel presensi |
+| absen/web/success.php | Halaman konfirmasi sukses, auto-redirect 5 detik |
+
+### Keterhubungan dengan sistem:
+
+- Menggunakan config/database.php (PDO) - tidak melalui REST API Android
+- Menggunakan config/csrf.php untuk proteksi CSRF
+- Data tersimpan langsung di tabel presensi_apel dan presensi yang sudah ada
+- Rekap muncul otomatis di admin/dashboard.php tab Apel & Rapat
+
+---
+
+*Terakhir diperbarui: 14 Oktober 2026.*
