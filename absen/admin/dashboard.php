@@ -1010,6 +1010,10 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
             </div>
 
             <div class="topbar-right">
+                <a href="../web/index.php" target="_blank" class="btn btn-modern-outline btn-sm d-flex align-items-center gap-1" title="Buka Portal Presensi Peserta">
+                    <span>🌐</span>
+                    <span class="d-none d-md-inline">Portal Web Absensi</span>
+                </a>
                 <button class="btn btn-modern-outline btn-sm d-flex align-items-center gap-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapseApiInfo" aria-expanded="false" aria-controls="collapseApiInfo">
                     <span>📡</span>
                     <span class="d-none d-sm-inline">Info REST API</span>
