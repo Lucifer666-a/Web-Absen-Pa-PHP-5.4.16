@@ -57,6 +57,45 @@ function createTempImageFromBase64(?string $base64Data, array &$tempFiles): ?str
     return null;
 }
 
+function addKopSuratToSheet($sheet, string $maxCol = 'F'): int {
+    $kopCandidates = [
+        __DIR__ . '/../assets/kop.png',
+        __DIR__ . '/../../kop.png',
+        dirname(__DIR__, 2) . '/kop.png',
+    ];
+
+    $kopFile = null;
+    foreach ($kopCandidates as $candidate) {
+        if (file_exists($candidate)) {
+            $kopFile = $candidate;
+            break;
+        }
+    }
+
+    if ($kopFile) {
+        // Atur tinggi baris 1-4 untuk ruang KOP surat
+        $sheet->getRowDimension(1)->setRowHeight(32);
+        $sheet->getRowDimension(2)->setRowHeight(32);
+        $sheet->getRowDimension(3)->setRowHeight(30);
+        $sheet->getRowDimension(4)->setRowHeight(25);
+        $sheet->getRowDimension(5)->setRowHeight(12); // Spasi pemisah
+
+        $drawing = new Drawing();
+        $drawing->setName('KopSurat');
+        $drawing->setDescription('Kop Surat Pengadilan Agama');
+        $drawing->setPath($kopFile);
+        $drawing->setCoordinates('A1');
+        $drawing->setHeight(115);
+        $drawing->setOffsetX(10);
+        $drawing->setOffsetY(4);
+        $drawing->setWorksheet($sheet);
+
+        return 6; // Baris awal konten berikutnya
+    }
+
+    return 1;
+}
+
 $spreadsheet = new Spreadsheet();
 $sheet = $spreadsheet->getActiveSheet();
 $sheet->setShowGridLines(true);
@@ -142,20 +181,26 @@ if ($type === 'rapat') {
     $pinAcara  = $active_acara['pin_acara'] ?? '-';
     $statusAcara = $active_acara['status'] ?? '-';
 
-    // Judul & Metadata
-    $sheet->setCellValue('A1', 'REKAP PRESENSI RAPAT / ACARA');
-    $sheet->getStyle('A1')->applyFromArray($titleStyle);
-    $sheet->getRowDimension(1)->setRowHeight(25);
+    $startKopRow = addKopSuratToSheet($sheet, 'E');
 
-    $sheet->setCellValue('A2', 'Nama Acara: ' . $namaAcara);
-    $sheet->setCellValue('A3', 'PIN Acara: ' . $pinAcara . '  |  Status: ' . $statusAcara);
-    $sheet->setCellValue('A4', 'Tanggal Cetak: ' . date('d/m/Y H:i:s'));
-    $sheet->getStyle('A2:A4')->applyFromArray($metaLabelStyle);
+    // Judul & Metadata
+    $rowJudul = $startKopRow;
+    $sheet->setCellValue("A{$rowJudul}", 'REKAP PRESENSI RAPAT / ACARA');
+    $sheet->getStyle("A{$rowJudul}")->applyFromArray($titleStyle);
+    $sheet->getRowDimension($rowJudul)->setRowHeight(25);
+
+    $rowMeta1 = $rowJudul + 1;
+    $rowMeta2 = $rowJudul + 2;
+    $rowMeta3 = $rowJudul + 3;
+    $sheet->setCellValue("A{$rowMeta1}", 'Nama Acara: ' . $namaAcara);
+    $sheet->setCellValue("A{$rowMeta2}", 'PIN Acara: ' . $pinAcara . '  |  Status: ' . $statusAcara);
+    $sheet->setCellValue("A{$rowMeta3}", 'Tanggal Cetak: ' . date('d/m/Y H:i:s'));
+    $sheet->getStyle("A{$rowMeta1}:A{$rowMeta3}")->applyFromArray($metaLabelStyle);
 
     // Header Kolom Tabel
     $headers = ['No', 'Waktu Absen', 'Nama Pegawai', 'Jabatan', 'Tanda Tangan'];
     $cols = ['A', 'B', 'C', 'D', 'E'];
-    $startRow = 6;
+    $startRow = $rowMeta3 + 2;
 
     foreach ($headers as $idx => $h) {
         $cell = $cols[$idx] . $startRow;
@@ -308,32 +353,36 @@ if ($type === 'rapat') {
         $hariTanggalText = ":   {$wHari},  {$d} {$m} {$y}";
     }
 
+    $startKopRow = addKopSuratToSheet($sheet, 'F');
+
     // Header Format persis ABSEN apel.xlsx
-    $sheet->mergeCells('A6:F6');
-    $sheet->setCellValue('A6', $judulApel);
-    $sheet->getStyle('A6')->getFont()->setName('Arial')->setSize(14)->setBold(true);
-    $sheet->getStyle('A6')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
-    $sheet->getRowDimension(6)->setRowHeight(26);
+    $rowJudul = $startKopRow + 1;
+    $sheet->mergeCells("A{$rowJudul}:F{$rowJudul}");
+    $sheet->setCellValue("A{$rowJudul}", $judulApel);
+    $sheet->getStyle("A{$rowJudul}")->getFont()->setName('Arial')->setSize(14)->setBold(true);
+    $sheet->getStyle("A{$rowJudul}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+    $sheet->getRowDimension($rowJudul)->setRowHeight(26);
 
-    // Baris 8: HARI, TANGGAL
-    $sheet->setCellValue('A8', 'HARI, TANGGAL');
-    $sheet->getStyle('A8')->getFont()->setName('Arial')->setSize(10)->setBold(true);
-    $sheet->getStyle('A8')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+    // Baris HARI, TANGGAL
+    $rowHari = $rowJudul + 2;
+    $sheet->setCellValue("A{$rowHari}", 'HARI, TANGGAL');
+    $sheet->getStyle("A{$rowHari}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
+    $sheet->getStyle("A{$rowHari}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
 
-    $sheet->mergeCells('C8:F8');
-    $sheet->setCellValue('C8', $hariTanggalText);
-    $sheet->getStyle('C8')->getFont()->setName('Arial')->setSize(10)->setBold(true);
-    $sheet->getStyle('C8')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
-    $sheet->getRowDimension(8)->setRowHeight(20);
+    $sheet->mergeCells("C{$rowHari}:F{$rowHari}");
+    $sheet->setCellValue("C{$rowHari}", $hariTanggalText);
+    $sheet->getStyle("C{$rowHari}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
+    $sheet->getStyle("C{$rowHari}")->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+    $sheet->getRowDimension($rowHari)->setRowHeight(20);
 
-    // Baris 10: Table Headers persis ABSEN apel.xlsx
-    $startRow = 10;
-    $sheet->setCellValue('A10', 'NO');
-    $sheet->mergeCells('B10:C10');
-    $sheet->setCellValue('B10', 'NAMA');
-    $sheet->setCellValue('D10', 'JABATAN');
-    $sheet->mergeCells('E10:F10');
-    $sheet->setCellValue('E10', 'TANDA TANGAN');
+    // Table Headers persis ABSEN apel.xlsx
+    $startRow = $rowHari + 2;
+    $sheet->setCellValue("A{$startRow}", 'NO');
+    $sheet->mergeCells("B{$startRow}:C{$startRow}");
+    $sheet->setCellValue("B{$startRow}", 'NAMA');
+    $sheet->setCellValue("D{$startRow}", 'JABATAN');
+    $sheet->mergeCells("E{$startRow}:F{$startRow}");
+    $sheet->setCellValue("E{$startRow}", 'TANDA TANGAN');
 
     $tableHeaderStyle = [
         'font' => [
@@ -475,20 +524,26 @@ if ($type === 'rapat') {
     $stmtHarian->execute($paramsHarian);
     $data_presensi_harian = $stmtHarian->fetchAll();
 
-    // Judul & Metadata
-    $sheet->setCellValue('A1', 'REKAP ABSENSI HARIAN');
-    $sheet->getStyle('A1')->applyFromArray($titleStyle);
-    $sheet->getRowDimension(1)->setRowHeight(25);
+    $startKopRow = addKopSuratToSheet($sheet, 'H');
 
+    // Judul & Metadata
+    $rowJudul = $startKopRow;
+    $sheet->setCellValue("A{$rowJudul}", 'REKAP ABSENSI HARIAN');
+    $sheet->getStyle("A{$rowJudul}")->applyFromArray($titleStyle);
+    $sheet->getRowDimension($rowJudul)->setRowHeight(25);
+
+    $rowMeta1 = $rowJudul + 1;
+    $rowMeta2 = $rowJudul + 2;
+    $rowMeta3 = $rowJudul + 3;
     $periodeLabel = ($harian_tgl_mulai ? $harian_tgl_mulai : 'Semua') . ' s/d ' . ($harian_tgl_selesai ? $harian_tgl_selesai : 'Semua');
-    $sheet->setCellValue('A2', 'Periode: ' . $periodeLabel);
-    $sheet->setCellValue('A3', 'Total Riwayat: ' . count($data_presensi_harian) . ' catatan');
-    $sheet->setCellValue('A4', 'Tanggal Cetak: ' . date('d/m/Y H:i:s'));
-    $sheet->getStyle('A2:A4')->applyFromArray($metaLabelStyle);
+    $sheet->setCellValue("A{$rowMeta1}", 'Periode: ' . $periodeLabel);
+    $sheet->setCellValue("A{$rowMeta2}", 'Total Riwayat: ' . count($data_presensi_harian) . ' catatan');
+    $sheet->setCellValue("A{$rowMeta3}", 'Tanggal Cetak: ' . date('d/m/Y H:i:s'));
+    $sheet->getStyle("A{$rowMeta1}:A{$rowMeta3}")->applyFromArray($metaLabelStyle);
 
     $headers = ['No', 'Tanggal', 'NIP', 'Nama Pegawai', 'Jabatan', 'Jam Masuk (Check-in)', 'Jam Pulang (Check-out)', 'Foto'];
     $cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-    $startRow = 6;
+    $startRow = $rowMeta3 + 2;
 
     foreach ($headers as $idx => $h) {
         $cell = $cols[$idx] . $startRow;
