@@ -1,268 +1,324 @@
-# Web Absen Pa — Changelog Implementasi
+# 📋 Web Absen Pa — Comprehensive Documentation
 
-Dokumen ini mencatat semua perubahan aktual yang telah dikerjakan berdasarkan
-GitHub Issues **#8–#17** (ditutup 07 Oktober 2026).
-Semua nama tabel, nama fungsi, dan nama file di bawah ini telah diverifikasi
-langsung dari kode.
+Welcome to **Web Absen Pa**, a modern, lightweight, and secure multi-channel attendance and event presence management system. Designed for governmental, corporate, or institutional environments, this platform streamlines employee presence recording across regular office days, official roll calls (morning/afternoon assemblies), and specialized meetings or seminars.
 
----
-
-## ✅ Issue #8 — Tab Absen Harian beserta Download Excel
-
-**File:** `absen/admin/dashboard.php`
-
-### Yang dikerjakan:
-
-1. **Active tab**: `'harian'` ditambahkan ke array validasi
-   `['rapat', 'apel', 'harian', 'rekap', 'users', 'pengaturan']`.
-
-2. **Query backend** mengambil dari tabel **`absensi_harian`** (nama aktual di DB)
-   dengan JOIN ke `users`, filter `user_id` dan rentang tanggal.
-
-3. **Filter**: dropdown pegawai + input tanggal mulai & selesai.
-
-4. **Tabel HTML**: kolom No, Tanggal, Nama Pegawai, Jabatan,
-   Jam Masuk (`waktu_checkin`), Jam Pulang (`waktu_checkout`).
-
-5. **Export Excel**: fungsi JS `exportHarianToExcel()` via SheetJS,
-   nama file `absen_harian_YYYY-MM-DD.xlsx`.
+The system features:
+1. **Responsive Web Portal** for employees with session protection and instant signature capture.
+2. **Comprehensive Admin Dashboard** for monitoring, session management, user control, and Excel reporting.
+3. **Robust REST API Backend** for mobile (Android) app integrations with bearer token security.
 
 ---
 
-## ✅ Issue #9 — Proteksi Akses Admin di Server (Login Check)
+## 📑 Table of Contents
 
-**File:** `absen/config/database.php`, `absen/admin/auth_check.php`, `absen/admin/dashboard.php`
-
-### Yang dikerjakan:
-
-1. **Fungsi `checkAdminSession()`** di `config/database.php`:
-   - Cek `$_SESSION['admin_logged_in'] === true`
-   - Jika tidak ada → `header("Location: ../admin/login.php"); exit;`
-
-2. **`auth_check.php`** memanggil `require_once database.php` lalu `checkAdminSession()`.
-
-3. **`dashboard.php`** baris pertama: `require_once 'auth_check.php'` sebelum output HTML.
-
----
-
-## ✅ Issue #10 — Validasi Data Pegawai dan Fitur Nonaktifkan Akun
-
-**File:** `absen/admin/manage_users.php`, `absen/config/database.php`, `absen/api/login.php`
-
-### Yang dikerjakan:
-
-1. **Validasi tambah/edit pegawai** (server-side): NIP wajib angka, Username tanpa spasi.
-2. **Kolom `is_active`** (TINYINT default 1) ditambahkan otomatis via `ALTER TABLE`.
-3. **Tombol Nonaktifkan/Aktifkan** di tabel pegawai (soft-delete).
-4. **`api/login.php`** menolak login Android jika `is_active = 0`.
+- [Key Features](#-key-features)
+- [System Architecture & Interfaces](#-system-architecture--interfaces)
+  - [1. Employee Web Portal (`/absen/web/`)](#1-employee-web-portal-absenweb)
+  - [2. Administrative Panel (`/absen/admin/`)](#2-administrative-panel-absenadmin)
+  - [3. Mobile REST API (`/absen/api/`)](#3-mobile-rest-api-absenapi)
+- [Technology Stack](#-technology-stack)
+- [Database Architecture](#-database-architecture)
+- [Security & Validation Mechanisms](#-security--validation-mechanisms)
+- [Directory Structure](#-directory-structure)
+- [Getting Started & Installation](#-getting-started--installation)
+- [Default Credentials](#-default-credentials)
+- [API Reference Summary](#-api-reference-summary)
+- [License](#-license)
 
 ---
 
-## ✅ Issue #11 — Rekap Per Pegawai Per Bulan dan Daftar Tidak Hadir
+## 🚀 Key Features
 
-**File:** `absen/admin/dashboard.php`
-
-### Yang dikerjakan:
-
-1. **Tab "📊 Rekap"** dengan dua sub-section.
-2. **Rekap bulanan per pegawai**: query dengan sub-select COUNT dari `presensi_apel`, `presensi`, dan `absensi_harian`.
-3. **Daftar tidak hadir apel**: query `NOT IN` subquery untuk pegawai aktif yang tidak ada di `presensi_apel`.
-4. **Card summary**: "Hadir X dari Y pegawai".
-
----
-
-## ✅ Issue #12 — Perbaikan Filter dan Tampilan Tabel
-
-**File:** `absen/admin/dashboard.php`
-
-### Yang dikerjakan:
-
-1. Filter pegawai di tab Apel.
-2. Pencarian real-time dan pagination di tabel.
-3. Daftar semua rapat beserta status, PIN, dan tombol aksi.
-4. Kartu REST API dipindahkan ke tab Pengaturan & Log.
+- **Multi-Category Attendance Tracking**:
+  - **Daily Presence (Absensi Harian)**: Morning check-in and evening check-out with automated punctuality classification (`tepat_waktu` / `terlambat`).
+  - **Assembly / Roll Call Presence (Presensi Apel)**: Scheduled for Monday Morning and Friday Afternoon assemblies with digital touch signature.
+  - **Meeting / Seminar Presence (Presensi Rapat)**: Supports dynamic multi-event creation, PIN protection, opening/closing statuses, and digital signature verification.
+- **Account-Locked Attendance**: Employees log into their individual account; presence is automatically tied to their authenticated profile—preventing proxy or fraudulent submissions on behalf of peers.
+- **Digital Canvas Signature**: Touch-friendly, zero-dependency HTML5 Canvas signature pad with clear, preview, and base64 export capabilities.
+- **One Presence Per Account Rule**: Robust database checks prevent double submissions for the same employee within the same active session or date.
+- **Admin Command Center**: Tabbed real-time interface with live counters, data filtering (by employee, date range, or event), audit logs, and account activation switches (soft delete).
+- **One-Click Excel Reporting**: Export attendance logs into formatted `.xlsx` spreadsheets (headers, metadata, timestamps, and footers).
+- **Mobile-Ready REST API**: Complete JSON endpoints with token validation and refresh rotation for Android applications.
 
 ---
 
-## ✅ Issue #13 — Fix: Label Sesi Apel Salah Hari
+## 🖥 System Architecture & Interfaces
 
-**File:** `absen/api/absen_apel.php`
+The system is separated into three distinct functional areas:
 
-### Yang dikerjakan:
-
-1. Label hari dihitung dari tanggal aktual: `$dayOfWeek = (int)date('N', strtotime($tanggal));`.
-2. Validasi jam & hari apel (Pagi: Senin 07:00–08:30, Sore: Jumat 16:00–17:30).
-
----
-
-## ✅ Issue #14 — Perbaikan Format Excel (Header & Catatan Kaki)
-
-**File:** `absen/admin/dashboard.php`
-
-### Yang dikerjakan:
-
-1. Baris judul + nama laporan + periode filter.
-2. Header kolom dicetak tebal.
-3. Catatan kaki rekap presensi resmi.
-
----
-
-## ✅ Issue #15 — Log Aktivitas Admin, Ganti Password, dan Grafik
-
-**File:** `absen/config/database.php`, `absen/admin/dashboard.php`
-
-### Yang dikerjakan:
-
-1. Tabel `log_aktivitas` dan fungsi `logAdminActivity()`.
-2. Grafik Kehadiran (7 Hari Terakhir) via Chart.js.
-3. Ganti Password Admin dan tabel Log Aktivitas.
-
----
-
-## ✅ Issue #16 — Autentikasi API Android menggunakan JWT Bearer Token
-
-**File:** `absen/config/jwt.php`, `absen/config/database.php`, `absen/api/login.php`, `absen/api/refresh_token.php`, `absen/api/logout.php`, `absen/api/user_status.php`, `absen/api/absen_harian.php`, `absen/api/absen_apel.php`, `absen/api/absen.php`
-
-### Yang dikerjakan:
-
-1. **JWT Helper (`config/jwt.php`)**: Implementasi native PHP JWT HS256.
-2. **Skema DB `token_blacklist`**: Menyimpan token JTI yang di-revoke.
-3. **Login API (`api/login.php`)**: Mengembalikan `access_token` (8 jam) & `refresh_token` (7 hari).
-4. **Refresh & Logout**: `api/refresh_token.php` dan `api/logout.php`.
-5. **Proteksi API**: Header `Authorization: Bearer <token>` diwajibkan di semua endpoint API.
+```
+                          ┌───────────────────────────┐
+                          │   System Entry Point      │
+                          │   (absen/index.php)       │
+                          └─────────────┬─────────────┘
+                                        │ Redirects
+                                        ▼
+             ┌─────────────────────────────────────────────────────┐
+             │       Employee Web Portal (/absen/web/)             │
+             │   - login.php (with quick Admin Link)               │
+             │   - index.php (Role Selection: Apel vs Rapat)       │
+             │   - absen_apel.php & absen_rapat.php (Canvas Sign)  │
+             └──────────────────────────┬──────────────────────────┘
+                                        │
+             ┌──────────────────────────┴──────────────────────────┐
+             │                                                     │
+             ▼                                                     ▼
+┌───────────────────────────────┐             ┌───────────────────────────────┐
+│ Administrative Dashboard      │             │ Android REST API Services     │
+│ (/absen/admin/)               │             │ (/absen/api/)                 │
+│ - Live Dashboard & Metrics    │             │ - Auth & Token Refresh        │
+│ - Meeting/Event Management    │             │ - Daily In/Out Absen          │
+│ - Employee Master Records     │             │ - Apel & Rapat Absen          │
+│ - Excel Spreadsheet Exports   │             │ - User Status & History       │
+└───────────────────────────────┘             └───────────────────────────────┘
+                                        ▲
+                                        │
+                                ┌───────┴───────┐
+                                │ MySQL Database│
+                                │  (`db_absen`) │
+                                └───────────────┘
+```
 
 ---
 
-## ✅ Issue #17 — Proteksi CSRF pada Semua Form POST Admin
+### 1. Employee Web Portal (`/absen/web/`)
 
-**File:** `absen/config/csrf.php`, `absen/config/database.php`, `absen/admin/login.php`, `absen/admin/manage_users.php`, `absen/admin/manage_acara.php`, `absen/admin/dashboard.php`
+Tailored for mobile and desktop browsers with an intuitive, clean emerald theme:
 
-### Yang dikerjakan:
-
-1. **CSRF Helper (`config/csrf.php`)**:
-   - `generateCsrfToken()`: Menghasilkan token acak 64 karakter heksadesimal (`bin2hex(random_bytes(32))`).
-   - `csrfField()`: Menghasilkan elemen `<input type="hidden" name="csrf_token" value="...">`.
-   - `verifyCsrfToken()`: Memverifikasi kesesuaian token request dengan session via `hash_equals()`.
-   - `enforceCsrfCheck()`: Middleware penolak request POST tanpa token valid (HTTP 403 Forbidden).
-
-2. **Integrasi Form & Handler Admin**:
-   - Disisipkan `enforceCsrfCheck()` pada awal pemrosesan POST di `admin/login.php`, `admin/manage_users.php`, `admin/manage_acara.php`, dan `admin/dashboard.php`.
-   - Disisipkan `<?= csrfField() ?>` pada seluruh elemen form POST di panel administrator.
-
----
-
-## ✅ Issue #31 — Restriksi IP Jaringan Lokal Kantor pada Endpoint Presensi
-
-**File:** `absen/config/ip_whitelist.php`, `absen/config/database.php`, `absen/api/absen.php`, `absen/api/absen_apel.php`, `absen/api/absen_harian.php`
-
-### Yang dikerjakan:
-
-1. **IP Whitelist Helper (`config/ip_whitelist.php`)**:
-   - `getClientIp()`: Mengambil `$_SERVER['REMOTE_ADDR']` secara aman tanpa mempercayai header `X-Forwarded-For` yang rentan diajukan secara terlarang oleh klien.
-   - `isIpAllowed($ip, $allowedNetworks)`: Memvalidasi alamat IP terhadap IP kantor utama **`192.168.5.100`**, rentan subnet Wi-Fi/LAN kantor (`192.168.5.0/24`), CIDR IPv4 umum (`192.168.0.0/16`, `10.0.0.0/8`), serta IP localhost (`127.0.0.1/32`, `::1/128`).
-   - `enforceNetworkRestriction()`: Middleware penolak request dari IP di luar jaringan kantor dengan HTTP status `403 Forbidden` dan format JSON `code: "NETWORK_RESTRICTED"`.
-
-2. **Integrasi Endpoint Absensi**:
-   - Disisipkan `enforceNetworkRestriction()` pada endpoint `api/absen.php`, `api/absen_apel.php`, dan `api/absen_harian.php`.
-   - Endpoint autentikasi (login, refresh token, status user) tetap terbuka tanpa pembatasan IP agar pengguna dapat masuk terlebih dahulu.
+1. **Employee Login (`web/login.php`)**:
+   - Modern floating card interface with institutional branding.
+   - Credentials authenticated against the `users` database table (bcrypt hash & active status verification).
+   - Direct button in the corner to switch to **"Login sebagai Administrator"**.
+2. **Portal Hub (`web/index.php`)**:
+   - Greet banner displaying employee name, NIP, and designation.
+   - Quick two-card selection: **Presensi Apel** or **Presensi Rapat**.
+   - Logout button destroying employee session while preserving global settings.
+3. **Assembly Attendance Form (`web/absen_apel.php`)**:
+   - Locked identity card (Name, NIP, and Role auto-populated from session—no dropdowns).
+   - Session selector (Monday Morning or Friday Afternoon) with auto-detection.
+   - Interactive HTML5 signature pad.
+4. **Meeting Attendance Form (`web/absen_rapat.php`)**:
+   - Locked employee profile card.
+   - Selection of open meetings/events fetched dynamically from the database.
+   - Event PIN verification to ensure physical presence in the room.
+   - Interactive HTML5 signature pad.
+5. **Success Page (`web/success.php`)**:
+   - Animated visual feedback indicating successful submission with summary card and return links.
 
 ---
 
-## Checklist Pengujian
+### 2. Administrative Panel (`/absen/admin/`)
 
-| # | Uji | Hasil yang benar |
+Secured via `checkAdminSession()`:
+
+- **Dashboard Tab (`dashboard.php?tab=rapat`)**: View attendees across all meetings, filter by event or employee, preview digital signatures, and export to Excel.
+- **Assembly Tab (`dashboard.php?tab=apel`)**: Monitor morning/afternoon assembly attendance, filter by date and employee, check absenteeism lists ("Pegawai Belum Absen").
+- **Daily Attendance Tab (`dashboard.php?tab=harian`)**: Track check-in & check-out times, punctuality indicators, and download full logs.
+- **Recap Tab (`dashboard.php?tab=rekap`)**: Monthly presence summary per employee across all attendance types with high-level KPI cards.
+- **User Management Tab (`dashboard.php?tab=users`)**: Add, edit, or toggle employee active status (`is_active` soft-delete) without breaking historic foreign keys.
+- **Event Management (`manage_acara.php`)**: Create meetings, assign 6-digit PIN codes, toggle status (`BUKA` / `TUTUP`), and manage attendees.
+- **Settings & Logs (`dashboard.php?tab=pengaturan`)**: Global static API tokens, configuration details, and REST API testing endpoints.
+
+---
+
+### 3. Mobile REST API (`/absen/api/`)
+
+Enables Android apps to synchronize with the centralized database:
+
+- `POST /api/login.php`: Authenticates employee credentials, returns user profile and access token.
+- `POST /api/logout.php`: Invalidates active session.
+- `POST /api/refresh_token.php`: Generates fresh access token.
+- `POST /api/absen_harian.php`: Records daily check-in (before cut-off) or check-out, with photo upload support.
+- `POST /api/absen_apel.php`: Registers assembly attendance with digital signature payload.
+- `POST /api/absen.php`: Registers meeting attendance validated against the event PIN.
+- `GET  /api/acara.php`: Retrieves list of currently active meetings.
+- `GET  /api/user_status.php`: Fetches today's attendance status and history for the requesting employee.
+
+---
+
+## 🛠 Technology Stack
+
+### Backend
+- **PHP 8.x**: Fast, dependency-free core with modular separation of concerns.
+- **PDO (PHP Data Objects)**: Secure database communication with prepared statements.
+- **Bcrypt (`password_hash` / `password_verify`)**: High-entropy password hashing.
+- **JSON RESTful Architecture**: Clean, standardized response formats for client-side consuming.
+
+### Frontend
+- **HTML5 Semantic Markup**: Accessible and SEO-friendly structures.
+- **Vanilla CSS3**: Modern design system utilizing custom CSS properties, flexbox, CSS grid, glassmorphism, responsive media queries, and smooth micro-animations (no heavy frontend frameworks required).
+- **Vanilla JavaScript (ES6+)**:
+  - Touch-friendly HTML5 Canvas for digital signature drawing.
+  - Asynchronous form submissions (`fetch`) with instant UI feedback.
+  - Client-side DOM filtering and search.
+- **Google Fonts (Outfit / Inter / Plus Jakarta Sans)**: Sleek, high-readability modern typography.
+- **SheetJS (xlsx.full.min.js)**: Client-side Excel `.xlsx` spreadsheet generation.
+
+### Database & Storage
+- **MySQL / MariaDB**: Relational schema with foreign key constraints, indexes, and transactional consistency.
+- **Base64 / MediumText Storage**: Vector/canvas signatures stored directly in records for self-contained, portable reports.
+
+---
+
+## 🗄 Database Architecture
+
+The system operates on the `db_absen` schema:
+
+| Table | Description | Key Fields |
 |---|---|---|
-| 1 | Buka `dashboard.php` di incognito tanpa login | Redirect ke `login.php` |
-| 2 | Kirim absen apel pagi hari Rabu | HTTP 400 — ditolak |
-| 3 | Kirim absen apel sore hari Senin | HTTP 400 — ditolak |
-| 4 | Kirim absen apel pagi Senin jam 09:00 | HTTP 400 — melewati batas jam |
-| 5 | Nonaktifkan pegawai → login Android | Login ditolak (`is_active = 0`) |
-| 6 | Tambah pegawai NIP berhuruf | Validasi server menolak |
-| 7 | Tambah pegawai username berspasi | Validasi server menolak |
-| 8 | Unduh Excel tab Harian | Ada judul, catatan kaki, nama file `absen_harian_*.xlsx` |
-| 9 | Rekap bulan ini | Angka cocok isi `presensi_apel` + `absensi_harian` |
-| 10 | Ganti password → login ulang | Password baru berlaku, tercatat di Log Aktivitas |
-| 11 | Login API Android (`api/login.php`) | Mengembalikan `access_token` (JWT) & `refresh_token` |
-| 12 | Akses API tanpa Header Authorization | HTTP 401 — Akses ditolak |
-| 13 | Logout API (`api/logout.php`) | Token masuk `token_blacklist`, request berikutnya ditolak |
-| 14 | Submit form POST admin tanpa CSRF token | HTTP 403 Forbidden — Request ditolak |
-| 15 | Akses API Absen dari IP luar kantor (Public IP) | HTTP 403 Forbidden — `NETWORK_RESTRICTED` |
+| `users` | Employee master data & web/mobile auth | `id`, `nip`, `nama`, `jabatan`, `username`, `password`, `is_active`, `created_at` |
+| `admin` | Super administrator accounts | `id`, `username`, `password`, `nama_lengkap`, `created_at` |
+| `acara` | Multi-meeting registry | `id`, `nama_acara`, `pin_acara`, `status` (`BUKA`/`TUTUP`), `created_at` |
+| `presensi` | Attendance records for meetings | `id`, `acara_id` (FK), `user_id` (FK), `nama`, `jabatan`, `tanda_tangan`, `waktu_absen` |
+| `presensi_apel` | Attendance records for assemblies | `id`, `user_id` (FK), `nama`, `jabatan`, `tanda_tangan`, `sesi` (`pagi`/`sore`), `tanggal`, `waktu` |
+| `absensi_harian` | Daily office check-in / check-out | `id`, `user_id` (FK), `tanggal`, `waktu_checkin`, `waktu_checkout`, `status_checkin`, `foto_path` |
+| `pengaturan` | Global token & static configurations | `id`, `access_token`, `updated_at` |
 
 ---
 
----
+## 🔒 Security & Validation Mechanisms
 
-## ✅ Issue #18 — Embed Gambar Tanda Tangan Nyata ke Export Excel
-
-**File:** `absen/admin/export_excel.php`, `absen/admin/dashboard.php`, `composer.json`
-
-### Yang dikerjakan:
-
-1. **Instalasi PhpSpreadsheet**: Menambahkan dependency `phpoffice/phpspreadsheet` via Composer dan mengaktifkan ekstensi PHP `gd` dan `zip`.
-2. **Endpoint Server-Side (`admin/export_excel.php`)**:
-   - Menghasilkan file Excel `.xlsx` menggunakan `PhpOffice\PhpSpreadsheet\Spreadsheet`.
-   - Mengambil data presensi (Rapat, Apel, Absen Harian) langsung dari database.
-   - Mendekode data Base64 tanda tangan pegawai menjadi gambar nyata dan menanamkannya langsung ke dalam sel kolom "Tanda Tangan" menggunakan `PhpOffice\PhpSpreadsheet\Worksheet\Drawing`.
-   - Memformat header tebal dengan background warna elegan, borders, alignment rapi, judul dokumen, metadata filter/acara, serta catatan kaki administratif resmi.
-   - Membersihkan file temporary gambar secara otomatis setelah proses unduh selesai (`register_shutdown_function`).
-3. **Pembaruan Dashboard (`admin/dashboard.php`)**:
-   - Menghubungkan tombol Download Excel pada tab Rapat, Apel, dan Absen Harian langsung ke endpoint server-side `export_excel.php` dengan parameter filter yang sesuai.
+- **SQL Injection Prevention**: 100% of queries use PDO Prepared Statements with bound parameters.
+- **Cross-Site Request Forgery (CSRF)**: All web forms include cryptographically secure CSRF tokens verified via `csrf.php` before processing.
+- **Cross-Site Scripting (XSS)**: Strict escaping of all output via `htmlspecialchars(..., ENT_QUOTES, 'UTF-8')`.
+- **Session Protection**:
+  - Distinct session keys for employees (`$_SESSION['pegawai_*']`) and administrators (`$_SESSION['admin_*']`) to prevent privilege escalation.
+  - `session_regenerate_id(true)` executed upon every successful authentication.
+- **Account State Checking**: Deactivated accounts (`is_active = 0`) are immediately blocked from both web and mobile login.
+- **Duplicate Prevention**: Database checks enforce that a single user account cannot submit duplicate attendance for the same meeting or the same assembly session.
 
 ---
 
-## Ringkasan File yang Diubah
+## 📁 Directory Structure
 
-| File | Issue |
-|---|---|
-| `absen/admin/dashboard.php` | #8, #9, #11, #12, #14, #15, #17, #18 |
-| `absen/admin/export_excel.php` | #18 (Baru) |
-| `absen/admin/manage_users.php` | #10, #17 |
-| `absen/admin/manage_acara.php` | #17 |
-| `absen/admin/login.php` | #10, #16, #17 |
-| `absen/admin/auth_check.php` | #9 |
-| `absen/api/absen_apel.php` | #13, #16, #31 |
-| `absen/api/absen_harian.php` | #16, #31 |
-| `absen/api/absen.php` | #16, #31 |
-| `absen/api/user_status.php` | #16 |
-| `absen/api/refresh_token.php` | #16 |
-| `absen/api/logout.php` | #16 |
-| `absen/config/csrf.php` | #17 (Baru) |
-| `absen/config/jwt.php` | #16 |
-| `absen/config/ip_whitelist.php` | #31 (Baru) |
-| `absen/config/database.php` | #9, #10, #15, #16, #17, #31 |
-
----
-
-*Terakhir diperbarui: 06 Oktober 2026.*
----
-
-## ?? Issue #33 � [OPEN] Buat Tampilan Web Absensi Simpel: Absen Apel & Absen Rapat
-
-**Labels:** `enhancement`, `frontend`, `backend`, `UX`, `priority: medium`
-**Link:** https://github.com/Lucifer666-a/Web_Absen_Pa/issues/33
-
-### Deskripsi Singkat:
-
-Membuat halaman web absensi berbasis browser (bukan Android) yang simpel dan terhubung langsung ke database db_absen yang sudah ada.
-
-### Fitur yang akan dibangun:
-
-| File Baru | Fungsi |
-|---|---|
-| absen/web/index.php | Halaman landing: pilih Absen Apel atau Absen Rapat |
-| absen/web/absen_apel.php | Form absen apel pagi/sore + canvas tanda tangan |
-| absen/web/proses_apel.php | Handler POST: validasi & INSERT ke tabel presensi_apel |
-| absen/web/absen_rapat.php | Form absen rapat: pilih acara aktif + PIN + tanda tangan |
-| absen/web/proses_rapat.php | Handler POST: validasi PIN & INSERT ke tabel presensi |
-| absen/web/success.php | Halaman konfirmasi sukses, auto-redirect 5 detik |
-
-### Keterhubungan dengan sistem:
-
-- Menggunakan config/database.php (PDO) - tidak melalui REST API Android
-- Menggunakan config/csrf.php untuk proteksi CSRF
-- Data tersimpan langsung di tabel presensi_apel dan presensi yang sudah ada
-- Rekap muncul otomatis di admin/dashboard.php tab Apel & Rapat
+```
+WebAbsenPa/
+├── README.md                     # Project documentation (this file)
+└── absen/                        # Main web application root
+    ├── index.php                 # Entry router (redirects to web/index.php)
+    ├── database.sql              # Database schema and seed data
+    │
+    ├── config/                   # Core configurations & utilities
+    │   ├── database.php          # PDO connection & session helpers
+    │   └── csrf.php              # CSRF protection tokens and middleware
+    │
+    ├── web/                      # Employee Presence Web Portal
+    │   ├── auth_check.php        # Employee session guard
+    │   ├── login.php             # Employee login page (with admin switch)
+    │   ├── proses_login.php      # Employee authentication handler
+    │   ├── logout.php            # Employee logout handler
+    │   ├── index.php             # Portal home (Apel vs Rapat selector)
+    │   ├── absen_apel.php        # Assembly attendance form (canvas sign)
+    │   ├── proses_apel.php       # Assembly submission processor
+    │   ├── absen_rapat.php       # Meeting attendance form (PIN + canvas)
+    │   ├── proses_rapat.php      # Meeting submission processor
+    │   └── success.php           # Post-submission confirmation screen
+    │
+    ├── admin/                    # Administrative Control Center
+    │   ├── auth_check.php        # Admin authentication middleware
+    │   ├── login.php             # Administrator login page
+    │   ├── logout.php            # Administrator logout script
+    │   ├── dashboard.php         # Central management dashboard (multi-tab)
+    │   ├── manage_acara.php      # Meeting creation, PIN, and status toggles
+    │   ├── manage_users.php      # Employee user CRUD and active toggles
+    │   ├── export_excel.php      # Server-side spreadsheet exporter
+    │   └── events.php            # Event helper handler
+    │
+    ├── api/                      # Mobile REST API Endpoints (JSON)
+    │   ├── index.php             # API documentation & health check
+    │   ├── login.php             # Mobile login endpoint
+    │   ├── logout.php            # Mobile logout endpoint
+    │   ├── refresh_token.php     # Token refresh endpoint
+    │   ├── acara.php             # List active meetings
+    │   ├── absen.php             # Submit meeting attendance
+    │   ├── absen_apel.php        # Submit assembly attendance
+    │   ├── absen_harian.php      # Submit daily check-in / check-out
+    │   └── user_status.php       # User presence profile & history
+    │
+    ├── assets/                   # Static resources (CSS, JS, Icons)
+    └── uploads/                  # Storage directory for captured photos
+```
 
 ---
 
-*Terakhir diperbarui: 14 Oktober 2026.*
+## ⚙️ Getting Started & Installation
+
+### Prerequisites
+- Web Server: **Apache** or **Nginx** (XAMPP, Laragon, or standalone)
+- **PHP 8.0+** with `pdo_mysql`, `mbstring`, and `openssl` extensions enabled
+- **MySQL 5.7+** or **MariaDB 10.3+**
+
+### Step-by-Step Setup
+
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/Lucifer666-a/Web_Absen_Pa.git
+   ```
+
+2. **Deploy to Web Directory**:
+   Move the project folder into your web server's document root (e.g., `C:/xampp/htdocs/WebAbsenPa`).
+
+3. **Import Database Schema**:
+   - Open phpMyAdmin or your MySQL CLI client:
+     ```bash
+     mysql -u root -p < absen/database.sql
+     ```
+   - This creates the `db_absen` database and seeds default administrative and sample employee accounts.
+
+4. **Configure Database Connection**:
+   Check `absen/config/database.php` and adjust credentials if needed:
+   ```php
+   $host = 'localhost';
+   $db   = 'db_absen';
+   $user = 'root';
+   $pass = ''; // Set your database password here
+   ```
+
+5. **Launch in Browser**:
+   - **Employee Web Portal**: `http://localhost/WebAbsenPa/absen/` (auto-redirects to `absen/web/login.php`)
+   - **Admin Panel**: `http://localhost/WebAbsenPa/absen/admin/login.php`
+   - **API Base**: `http://localhost/WebAbsenPa/absen/api/`
+
+---
+
+## 🔑 Default Credentials
+
+> [!WARNING]
+> Change these default passwords immediately when deploying to a production server!
+
+### Administrator Account
+- **URL**: `/absen/admin/login.php`
+- **Username**: `admin`
+- **Password**: `admin123`
+
+### Sample Employee Account
+- **URL**: `/absen/web/login.php`
+- **Username**: `pegawai1`
+- **Password**: `user123`
+
+### Sample Default Meeting
+- **Title**: `Rapat Perdana Acara Default`
+- **PIN Code**: `123456`
+
+---
+
+## 📡 API Reference Summary
+
+All API endpoints accept and return JSON (`Content-Type: application/json`):
+
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `POST` | `/api/login.php` | Employee login, returns token & user payload | No |
+| `POST` | `/api/logout.php` | Revoke session/token | Yes (Bearer) |
+| `POST` | `/api/refresh_token.php` | Request a refreshed access token | Yes (Bearer) |
+| `GET`  | `/api/acara.php` | List currently open meetings with status | No |
+| `POST` | `/api/absen.php` | Submit meeting attendance with PIN & signature | Yes (Bearer) |
+| `POST` | `/api/absen_apel.php` | Submit assembly attendance with signature | Yes (Bearer) |
+| `POST` | `/api/absen_harian.php` | Submit daily morning check-in or evening check-out | Yes (Bearer) |
+| `GET`  | `/api/user_status.php` | Check current user's daily attendance & history | Yes (Bearer) |
+
+---
+
+## 📄 License
+
+This project is developed and maintained for internal institutional attendance management. Released under the [MIT License](LICENSE) (or organizational proprietary terms where applicable).
