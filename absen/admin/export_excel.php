@@ -266,72 +266,142 @@ if ($type === 'rapat') {
     $stmtApel->execute($paramsApel);
     $data_presensi_apel = $stmtApel->fetchAll();
 
-    // Judul & Metadata
-    $sheet->setCellValue('A1', 'REKAP PRESENSI APEL (PAGI / SORE)');
-    $sheet->getStyle('A1')->applyFromArray($titleStyle);
-    $sheet->getRowDimension(1)->setRowHeight(25);
-
-    $sesiLabel = ($sesi_filter === 'pagi') ? 'Apel Pagi (Senin)' : (($sesi_filter === 'sore') ? 'Apel Sore (Jumat)' : 'Semua Sesi');
-    $periodeLabel = ($tgl_mulai ? $tgl_mulai : 'Awal') . ' s/d ' . ($tgl_selesai ? $tgl_selesai : 'Sekarang');
-    $sheet->setCellValue('A2', 'Filter Sesi: ' . $sesiLabel . '  |  Periode: ' . $periodeLabel);
-    $sheet->setCellValue('A3', 'Total Catatan: ' . count($data_presensi_apel) . ' presensi');
-    $sheet->setCellValue('A4', 'Tanggal Cetak: ' . date('d/m/Y H:i:s'));
-    $sheet->getStyle('A2:A4')->applyFromArray($metaLabelStyle);
-
-    $headers = ['No', 'Tanggal & Jam', 'Sesi Apel', 'Nama Pegawai', 'Jabatan', 'Tanda Tangan'];
-    $cols = ['A', 'B', 'C', 'D', 'E', 'F'];
-    $startRow = 6;
-
-    foreach ($headers as $idx => $h) {
-        $cell = $cols[$idx] . $startRow;
-        $sheet->setCellValue($cell, $h);
+    // Tentukan Judul Sesi Apel
+    if ($sesi_filter === 'pagi') {
+        $judulApel = 'DAFTAR HADIR APEL PAGI';
+    } elseif ($sesi_filter === 'sore') {
+        $judulApel = 'DAFTAR HADIR APEL SORE';
+    } else {
+        $judulApel = 'DAFTAR HADIR APEL PAGI / SORE';
     }
-    $sheet->getStyle("A{$startRow}:F{$startRow}")->applyFromArray($headerStyle);
-    $sheet->getRowDimension($startRow)->setRowHeight(28);
 
-    $currentRow = $startRow + 1;
+    // Format Hari, Tanggal Indonesia
+    $hariIndo = ['1'=>'SENIN', '2'=>'SELASA', '3'=>'RABU', '4'=>'KAMIS', '5'=>'JUM\'AT', '6'=>'SABTU', '7'=>'MINGGU'];
+    $bulanIndo = [
+        '01'=>'JANUARI', '02'=>'FEBRUARI', '03'=>'MARET', '04'=>'APRIL',
+        '05'=>'MEI', '06'=>'JUNI', '07'=>'JULI', '08'=>'AGUSTUS',
+        '09'=>'SEPTEMBER', '10'=>'OKTOBER', '11'=>'NOVEMBER', '12'=>'DESEMBER'
+    ];
+
+    if (!empty($tgl_mulai) && !empty($tgl_selesai) && $tgl_mulai === $tgl_selesai) {
+        $ts = strtotime($tgl_mulai);
+        $wHari = $hariIndo[date('N', $ts)] ?? '';
+        $d = date('j', $ts);
+        $m = $bulanIndo[date('m', $ts)] ?? '';
+        $y = date('Y', $ts);
+        $hariTanggalText = ":   {$wHari},  {$d} {$m} {$y}";
+    } elseif (!empty($tgl_mulai) || !empty($tgl_selesai)) {
+        $hariTanggalText = ":   " . ($tgl_mulai ?: 'Awal') . " s/d " . ($tgl_selesai ?: 'Sekarang');
+    } elseif (!empty($data_presensi_apel)) {
+        $ts = strtotime($data_presensi_apel[0]['tanggal']);
+        $wHari = $hariIndo[date('N', $ts)] ?? '';
+        $d = date('j', $ts);
+        $m = $bulanIndo[date('m', $ts)] ?? '';
+        $y = date('Y', $ts);
+        $hariTanggalText = ":   {$wHari},  {$d} {$m} {$y}";
+    } else {
+        $ts = time();
+        $wHari = $hariIndo[date('N', $ts)] ?? '';
+        $d = date('j', $ts);
+        $m = $bulanIndo[date('m', $ts)] ?? '';
+        $y = date('Y', $ts);
+        $hariTanggalText = ":   {$wHari},  {$d} {$m} {$y}";
+    }
+
+    // Header Format persis ABSEN apel.xlsx
+    $sheet->mergeCells('A6:F6');
+    $sheet->setCellValue('A6', $judulApel);
+    $sheet->getStyle('A6')->getFont()->setName('Arial')->setSize(14)->setBold(true);
+    $sheet->getStyle('A6')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+    $sheet->getRowDimension(6)->setRowHeight(26);
+
+    // Baris 8: HARI, TANGGAL
+    $sheet->setCellValue('A8', 'HARI, TANGGAL');
+    $sheet->getStyle('A8')->getFont()->setName('Arial')->setSize(10)->setBold(true);
+    $sheet->getStyle('A8')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+
+    $sheet->mergeCells('C8:F8');
+    $sheet->setCellValue('C8', $hariTanggalText);
+    $sheet->getStyle('C8')->getFont()->setName('Arial')->setSize(10)->setBold(true);
+    $sheet->getStyle('C8')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+    $sheet->getRowDimension(8)->setRowHeight(20);
+
+    // Baris 10: Table Headers persis ABSEN apel.xlsx
+    $startRow = 10;
+    $sheet->setCellValue('A10', 'NO');
+    $sheet->mergeCells('B10:C10');
+    $sheet->setCellValue('B10', 'NAMA');
+    $sheet->setCellValue('D10', 'JABATAN');
+    $sheet->mergeCells('E10:F10');
+    $sheet->setCellValue('E10', 'TANDA TANGAN');
+
+    $tableHeaderStyle = [
+        'font' => [
+            'name' => 'Arial',
+            'bold' => true,
+            'size' => 10,
+            'color' => ['rgb' => '000000'],
+        ],
+        'alignment' => [
+            'horizontal' => Alignment::HORIZONTAL_CENTER,
+            'vertical'   => Alignment::VERTICAL_CENTER,
+        ],
+        'borders' => [
+            'allBorders' => [
+                'borderStyle' => Border::BORDER_THIN,
+                'color' => ['rgb' => '000000'],
+            ],
+        ],
+    ];
+
+    $sheet->getStyle("A10:F10")->applyFromArray($tableHeaderStyle);
+    $sheet->getRowDimension(10)->setRowHeight(26);
+
+    $thinBorderAll = [
+        'borders' => [
+            'allBorders' => [
+                'borderStyle' => Border::BORDER_THIN,
+                'color' => ['rgb' => '000000'],
+            ],
+        ],
+    ];
+
+    $currentRow = 11;
     $no = 1;
-
-    $hariIndo = ['1'=>'Senin', '2'=>'Selasa', '3'=>'Rabu', '4'=>'Kamis', '5'=>'Jumat', '6'=>'Sabtu', '7'=>'Minggu'];
 
     if (!empty($data_presensi_apel)) {
         foreach ($data_presensi_apel as $row) {
-            $numHari = date('N', strtotime($row['tanggal']));
-            $namaHari = $hariIndo[$numHari] ?? '';
-            $sesiText = ($row['sesi'] === 'pagi' ? 'Pagi (' . $namaHari . ')' : 'Sore (' . $namaHari . ')');
-            $waktuFormatted = date('d/m/Y', strtotime($row['tanggal'])) . ' ' . date('H:i:s', strtotime($row['waktu']));
+            $sheet->mergeCells("B{$currentRow}:C{$currentRow}");
+            $sheet->mergeCells("E{$currentRow}:F{$currentRow}");
 
             $sheet->setCellValue("A{$currentRow}", $no);
-            $sheet->setCellValue("B{$currentRow}", $waktuFormatted);
-            $sheet->setCellValue("C{$currentRow}", $sesiText);
-            $sheet->setCellValue("D{$currentRow}", $row['nama']);
-            $sheet->setCellValue("E{$currentRow}", $row['jabatan']);
+            $sheet->setCellValue("B{$currentRow}", $row['nama']);
+            $sheet->setCellValue("D{$currentRow}", $row['jabatan']);
 
             // Alignments
             $sheet->getStyle("A{$currentRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
-            $sheet->getStyle("B{$currentRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
-            $sheet->getStyle("C{$currentRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("B{$currentRow}:C{$currentRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT)->setVertical(Alignment::VERTICAL_CENTER);
             $sheet->getStyle("D{$currentRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT)->setVertical(Alignment::VERTICAL_CENTER);
-            $sheet->getStyle("E{$currentRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT)->setVertical(Alignment::VERTICAL_CENTER);
-            $sheet->getStyle("F{$currentRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("E{$currentRow}:F{$currentRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
 
-            $sheet->getStyle("A{$currentRow}:F{$currentRow}")->applyFromArray($dataBorder);
+            $sheet->getStyle("A{$currentRow}:F{$currentRow}")->applyFromArray($thinBorderAll);
+            $sheet->getStyle("A{$currentRow}:F{$currentRow}")->getFont()->setName('Arial')->setSize(9.5);
 
             // Tanda Tangan Image Embed
             $sigPath = createTempImageFromBase64($row['tanda_tangan'] ?? null, $tempFiles);
             if ($sigPath && file_exists($sigPath)) {
-                $sheet->getRowDimension($currentRow)->setRowHeight(45);
+                $sheet->getRowDimension($currentRow)->setRowHeight(44);
                 $drawing = new Drawing();
                 $drawing->setName('TTD_Apel_' . $no);
                 $drawing->setDescription('Tanda Tangan ' . $row['nama']);
                 $drawing->setPath($sigPath);
-                $drawing->setCoordinates("F{$currentRow}");
-                $drawing->setHeight(50);
-                $drawing->setOffsetX(15);
-                $drawing->setOffsetY(4);
+                $drawing->setCoordinates("E{$currentRow}");
+                $drawing->setHeight(48);
+                $drawing->setOffsetX(35);
+                $drawing->setOffsetY(2);
                 $drawing->setWorksheet($sheet);
             } else {
-                $sheet->setCellValue("F{$currentRow}", '-');
+                $sheet->setCellValue("E{$currentRow}", '');
                 $sheet->getRowDimension($currentRow)->setRowHeight(24);
             }
 
@@ -339,27 +409,42 @@ if ($type === 'rapat') {
             $no++;
         }
     } else {
-        $sheet->setCellValue("A{$currentRow}", 'Belum ada data presensi apel sesuai filter.');
         $sheet->mergeCells("A{$currentRow}:F{$currentRow}");
+        $sheet->setCellValue("A{$currentRow}", 'Belum ada data presensi apel sesuai filter.');
         $sheet->getStyle("A{$currentRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
-        $sheet->getStyle("A{$currentRow}:F{$currentRow}")->applyFromArray($dataBorder);
+        $sheet->getStyle("A{$currentRow}:F{$currentRow}")->applyFromArray($thinBorderAll);
         $sheet->getRowDimension($currentRow)->setRowHeight(30);
         $currentRow++;
     }
 
+    // Bagian Mengetahui / Footer persis template ABSEN apel.xlsx
+    $currentRow += 2; // Beri jarak 2 baris kosong
+    $ttdCol = 'D';
+
+    $sheet->setCellValue("{$ttdCol}{$currentRow}", 'Mengetahui,');
+    $sheet->getStyle("{$ttdCol}{$currentRow}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
     $currentRow++;
-    $sheet->setCellValue("A{$currentRow}", '* Catatan: Data presensi apel ini sah dan berasal dari konfirmasi presensi pegawai via aplikasi Android.');
-    $sheet->getStyle("A{$currentRow}")->getFont()->setItalic(true)->setSize(9)->getColor()->setRGB('6B7280');
 
-    // Column widths
-    $sheet->getColumnDimension('A')->setWidth(8);
-    $sheet->getColumnDimension('B')->setWidth(24);
-    $sheet->getColumnDimension('C')->setWidth(18);
-    $sheet->getColumnDimension('D')->setWidth(30);
-    $sheet->getColumnDimension('E')->setWidth(26);
-    $sheet->getColumnDimension('F')->setWidth(22);
+    $sheet->setCellValue("{$ttdCol}{$currentRow}", 'KETUA PENGADILAN AGAMA PALEMBANG KELAS IA');
+    $sheet->getStyle("{$ttdCol}{$currentRow}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
+    $currentRow += 4; // Beri ruang tanda tangan fisik ketua
 
-    $filename = "Rekap_Presensi_Apel_{$sesi_filter}_" . date('Ymd_His') . ".xlsx";
+    $sheet->setCellValue("{$ttdCol}{$currentRow}", 'MURSYID SYAH, S.Ag.');
+    $sheet->getStyle("{$ttdCol}{$currentRow}")->getFont()->setName('Arial')->setSize(10)->setBold(true)->setUnderline(true);
+    $currentRow++;
+
+    $sheet->setCellValue("{$ttdCol}{$currentRow}", 'NIP. 197111251998031005');
+    $sheet->getStyle("{$ttdCol}{$currentRow}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
+
+    // Set Lebar Kolom yang proporsional mengikuti ABSEN apel.xlsx
+    $sheet->getColumnDimension('A')->setWidth(6);
+    $sheet->getColumnDimension('B')->setWidth(20);
+    $sheet->getColumnDimension('C')->setWidth(20);
+    $sheet->getColumnDimension('D')->setWidth(34);
+    $sheet->getColumnDimension('E')->setWidth(14);
+    $sheet->getColumnDimension('F')->setWidth(14);
+
+    $filename = "DAFTAR_HADIR_APEL_" . strtoupper($sesi_filter) . "_" . date('Ymd_His') . ".xlsx";
 
 } elseif ($type === 'harian') {
     // =========================================================================
