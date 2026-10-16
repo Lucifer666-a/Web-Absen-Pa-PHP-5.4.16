@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['status' => 'error', 'message' => 'Gunakan method POST.']);
+    echo json_encode(array('status' => 'error', 'message' => 'Gunakan method POST.'));
     exit;
 }
 
@@ -28,62 +28,62 @@ if (!is_array($input) || empty($input)) {
     $input = $_POST;
 }
 
-$username = trim($input['username'] ?? '');
-$password = trim($input['password'] ?? '');
+$username = trim(isset($input['username']) ? $input['username'] : '');
+$password = trim(isset($input['password']) ? $input['password'] : '');
 
 if ($username === '' || $password === '') {
     http_response_code(400);
-    echo json_encode([
+    echo json_encode(array(
         'status'  => 'error',
         'message' => 'Username dan password wajib diisi.'
-    ]);
+    ));
     exit;
 }
 
 try {
     $stmt = $pdo->prepare("SELECT id, nip, nama, jabatan, username, password, is_active FROM users WHERE username = ? LIMIT 1");
-    $stmt->execute([$username]);
+    $stmt->execute(array($username));
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$user || !password_verify($password, $user['password'])) {
         http_response_code(401);
-        echo json_encode([
+        echo json_encode(array(
             'status'  => 'error',
             'message' => 'Username atau password salah.'
-        ]);
+        ));
         exit;
     }
 
     if (isset($user['is_active']) && (int)$user['is_active'] === 0) {
         http_response_code(403);
-        echo json_encode([
+        echo json_encode(array(
             'status'  => 'error',
             'message' => 'Akun Anda telah dinonaktifkan oleh administrator.'
-        ]);
+        ));
         exit;
     }
 
     // Generate JWT Tokens
-    $tokenPayload = [
+    $tokenPayload = array(
         'user_id'  => (int)$user['id'],
         'username' => $user['username'],
         'nama'     => $user['nama'],
         'jabatan'  => $user['jabatan'],
         'nip'      => $user['nip'],
         'type'     => 'access'
-    ];
+    );
     $accessToken = generateJwtToken($tokenPayload, 28800); // 8 Jam
 
-    $refreshPayload = [
+    $refreshPayload = array(
         'user_id'  => (int)$user['id'],
         'username' => $user['username'],
         'type'     => 'refresh'
-    ];
+    );
     $refreshToken = generateJwtToken($refreshPayload, 604800); // 7 Hari
 
-    // Success response - sertakan JWT Token, jabatan & profil
+    // Success response
     http_response_code(200);
-    echo json_encode([
+    echo json_encode(array(
         'status'        => 'success',
         'message'       => 'Login berhasil.',
         'token_type'    => 'Bearer',
@@ -95,7 +95,7 @@ try {
         'nama'          => $user['nama'],
         'jabatan'       => $user['jabatan'],
         'nip'           => $user['nip'],
-        'data'          => [
+        'data'          => array(
             'user_id'       => (int)$user['id'],
             'nip'           => $user['nip'],
             'nama'          => $user['nama'],
@@ -103,13 +103,13 @@ try {
             'username'      => $user['username'],
             'access_token'  => $accessToken,
             'refresh_token' => $refreshToken
-        ]
-    ]);
+        )
+    ));
 
-} catch (\Exception $e) {
+} catch (Exception $e) {
     http_response_code(500);
-    echo json_encode([
+    echo json_encode(array(
         'status'  => 'error',
         'message' => 'Server error: ' . $e->getMessage()
-    ]);
+    ));
 }

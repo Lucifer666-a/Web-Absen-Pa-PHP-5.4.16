@@ -9,7 +9,7 @@
  */
 $GLOBALS['IP_WHITELIST_ENABLED'] = true;
 
-$GLOBALS['ALLOWED_NETWORKS'] = [
+$GLOBALS['ALLOWED_NETWORKS'] = array(
     '127.0.0.1/32',     // Localhost IPv4 (Development)
     '::1/128',          // Localhost IPv6 (Development)
     '192.168.5.100/32', // IP Spesifik Kantor
@@ -17,22 +17,22 @@ $GLOBALS['ALLOWED_NETWORKS'] = [
     '192.168.0.0/16',   // Jaringan Lokal Class C
     '10.0.0.0/8',       // Jaringan Lokal Class A
     '172.16.0.0/12',    // Jaringan Lokal Class B
-];
+);
 
 /**
  * Ambil IP client yang melakukan request secara aman
  * Menggunakan REMOTE_ADDR untuk mencegah IP spoofing via Header HTTP (X-Forwarded-For)
  */
-function getClientIp(): string {
-    return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+function getClientIp() {
+    return isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '127.0.0.1';
 }
 
 /**
  * Memeriksa apakah suatu IP berada dalam salah satu subnet/IP yang diizinkan
  */
-function isIpAllowed(string $ip, ?array $allowedNetworks = null): bool {
+function isIpAllowed($ip, $allowedNetworks = null) {
     if ($allowedNetworks === null) {
-        $allowedNetworks = $GLOBALS['ALLOWED_NETWORKS'] ?? [];
+        $allowedNetworks = isset($GLOBALS['ALLOWED_NETWORKS']) ? $GLOBALS['ALLOWED_NETWORKS'] : array();
     }
 
     // Tangani perbandingan langsung IP (misal ::1 atau IP persis)
@@ -91,8 +91,8 @@ function isIpAllowed(string $ip, ?array $allowedNetworks = null): bool {
  * Enforce network restriction middleware
  * Menghentikan eksekusi jika request berasal dari luar jaringan yang diizinkan.
  */
-function enforceNetworkRestriction(?array $allowedNetworks = null): void {
-    $enabled = $GLOBALS['IP_WHITELIST_ENABLED'] ?? true;
+function enforceNetworkRestriction($allowedNetworks = null) {
+    $enabled = isset($GLOBALS['IP_WHITELIST_ENABLED']) ? $GLOBALS['IP_WHITELIST_ENABLED'] : true;
     if (!$enabled) {
         return;
     }
@@ -104,12 +104,12 @@ function enforceNetworkRestriction(?array $allowedNetworks = null): void {
 
         http_response_code(403);
         header('Content-Type: application/json; charset=UTF-8');
-        echo json_encode([
+        echo json_encode(array(
             'status'  => 'error',
             'code'    => 'NETWORK_RESTRICTED',
             'message' => 'Fitur absensi hanya dapat diakses melalui jaringan Wi-Fi/LAN kantor.',
             'your_ip' => $clientIp
-        ], JSON_UNESCAPED_UNICODE);
+        ), JSON_UNESCAPED_UNICODE);
         exit;
     }
 }

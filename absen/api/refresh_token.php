@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['status' => 'error', 'message' => 'Gunakan method POST.']);
+    echo json_encode(array('status' => 'error', 'message' => 'Gunakan method POST.'));
     exit;
 }
 
@@ -27,14 +27,22 @@ if (!is_array($input) || empty($input)) {
     $input = $_POST;
 }
 
-$refreshToken = trim($input['refresh_token'] ?? $input['refreshToken'] ?? getBearerToken() ?? '');
+$bearerToken = getBearerToken();
+$refreshToken = '';
+if (isset($input['refresh_token']) && $input['refresh_token'] !== '') {
+    $refreshToken = trim($input['refresh_token']);
+} elseif (isset($input['refreshToken']) && $input['refreshToken'] !== '') {
+    $refreshToken = trim($input['refreshToken']);
+} elseif ($bearerToken) {
+    $refreshToken = trim($bearerToken);
+}
 
 if (empty($refreshToken)) {
     http_response_code(400);
-    echo json_encode([
+    echo json_encode(array(
         'status'  => 'error',
         'message' => 'Parameter refresh_token wajib dikirim (via body JSON atau Header Authorization).'
-    ]);
+    ));
     exit;
 }
 
@@ -45,34 +53,34 @@ try {
     // Cek apakah refresh token di-blacklist
     if (isset($payload['jti']) && isTokenBlacklisted($pdo, $payload['jti'])) {
         http_response_code(401);
-        echo json_encode([
+        echo json_encode(array(
             'status'  => 'error',
             'message' => 'Refresh token telah di-revoke. Silakan login kembali.'
-        ]);
+        ));
         exit;
     }
 
-    $userId = (int)($payload['user_id'] ?? 0);
+    $userId = isset($payload['user_id']) ? (int)$payload['user_id'] : 0;
     if ($userId <= 0) {
         http_response_code(401);
-        echo json_encode([
+        echo json_encode(array(
             'status'  => 'error',
             'message' => 'Payload refresh token tidak valid.'
-        ]);
+        ));
         exit;
     }
 
     // Ambil data user terbaru dari DB
     $stmtUser = $pdo->prepare("SELECT id, nip, nama, jabatan, username, is_active FROM users WHERE id = ? LIMIT 1");
-    $stmtUser->execute([$userId]);
+    $stmtUser->execute(array($userId));
     $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
 
     if (!$user || (int)$user['is_active'] === 0) {
         http_response_code(403);
-        echo json_encode([
+        echo json_encode(array(
             'status'  => 'error',
             'message' => 'Akun Anda tidak aktif atau telah dinonaktifkan.'
-        ]);
+        ));
         exit;
     }
 
@@ -80,37 +88,37 @@ try {
     blacklistToken($pdo, $refreshToken, $userId);
 
     // Generate JWT Tokens baru
-    $tokenPayload = [
+    $tokenPayload = array(
         'user_id'  => (int)$user['id'],
         'username' => $user['username'],
         'nama'     => $user['nama'],
         'jabatan'  => $user['jabatan'],
         'nip'      => $user['nip'],
         'type'     => 'access'
-    ];
+    );
     $newAccessToken = generateJwtToken($tokenPayload, 28800); // 8 Jam
 
-    $newRefreshPayload = [
+    $newRefreshPayload = array(
         'user_id'  => (int)$user['id'],
         'username' => $user['username'],
         'type'     => 'refresh'
-    ];
+    );
     $newRefreshToken = generateJwtToken($newRefreshPayload, 604800); // 7 Hari
 
     http_response_code(200);
-    echo json_encode([
+    echo json_encode(array(
         'status'        => 'success',
         'message'       => 'Token berhasil diperbarui.',
         'token_type'    => 'Bearer',
         'access_token'  => $newAccessToken,
         'refresh_token' => $newRefreshToken,
         'expires_in'    => 28800
-    ]);
+    ));
 
 } catch (\Exception $e) {
     http_response_code(401);
-    echo json_encode([
+    echo json_encode(array(
         'status'  => 'error',
         'message' => 'Gagal memperbarui token: ' . $e->getMessage()
-    ]);
+    ));
 }

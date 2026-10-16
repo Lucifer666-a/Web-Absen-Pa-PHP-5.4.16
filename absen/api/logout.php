@@ -25,7 +25,7 @@ $payload = verifyApiAuth($pdo, 'access');
 
 $token = getBearerToken();
 if ($token) {
-    blacklistToken($pdo, $token, (int)($payload['user_id'] ?? 0));
+    blacklistToken($pdo, $token, (int)(isset($payload['user_id']) ? $payload['user_id'] : 0));
 }
 
 // Opsional: blacklist juga refresh_token jika dikirim di request body
@@ -33,11 +33,11 @@ $rawInput = file_get_contents('php://input');
 $rawInput = ltrim($rawInput, "\xEF\xBB\xBF");
 $input    = json_decode($rawInput, true);
 if (is_array($input) && !empty($input['refresh_token'])) {
-    blacklistToken($pdo, trim($input['refresh_token']), (int)($payload['user_id'] ?? 0));
+    blacklistToken($pdo, trim($input['refresh_token']), (int)(isset($payload['user_id']) ? $payload['user_id'] : 0));
 }
 
 http_response_code(200);
-echo json_encode([
+echo json_encode(array(
     'status'  => 'success',
     'message' => 'Logout berhasil. Token telah di-revoke.'
-]);
+));

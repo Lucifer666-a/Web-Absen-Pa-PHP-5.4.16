@@ -16,8 +16,8 @@ if (!empty($_SESSION['pegawai_logged_in']) && $_SESSION['pegawai_logged_in'] ===
 }
 
 // Ambil flash message
-$errorMsg  = $_SESSION['flash_error'] ?? '';
-$oldInput  = $_SESSION['flash_old'] ?? [];
+$errorMsg  = isset($_SESSION['flash_error']) ? $_SESSION['flash_error'] : '';
+$oldInput  = isset($_SESSION['flash_old']) ? $_SESSION['flash_old'] : array();
 unset($_SESSION['flash_error'], $_SESSION['flash_old']);
 
 $jamDb = date('H:i');
@@ -238,7 +238,7 @@ $jamDb = date('H:i');
                             id="username"
                             name="username"
                             placeholder="Username"
-                            value="<?= htmlspecialchars($oldInput['username'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                            value="<?= htmlspecialchars(isset($oldInput['username']) ? $oldInput['username'] : '', ENT_QUOTES, 'UTF-8') ?>"
                             required
                             autocomplete="username"
                             autofocus

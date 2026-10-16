@@ -17,7 +17,7 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-$type = $_GET['type'] ?? 'rapat';
+$type = isset($_GET['type']) ? $_GET['type'] : 'rapat';
 $tempFiles = [];
 
 // Cleanup temporary image files on shutdown
@@ -32,7 +32,7 @@ register_shutdown_function(function() use (&$tempFiles) {
 /**
  * Decode Base64 data URI to temp PNG file
  */
-function createTempImageFromBase64(?string $base64Data, array &$tempFiles): ?string {
+function createTempImageFromBase64($base64Data, array &$tempFiles) {
     if (empty($base64Data)) {
         return null;
     }
@@ -57,7 +57,7 @@ function createTempImageFromBase64(?string $base64Data, array &$tempFiles): ?str
     return null;
 }
 
-function addKopSuratToSheet($sheet, string $maxCol = 'F'): int {
+function addKopSuratToSheet($sheet, $maxCol = 'F') {
     $kopCandidates = [
         __DIR__ . '/../assets/kop.png',
         __DIR__ . '/../../kop.png',
@@ -99,7 +99,7 @@ function addKopSuratToSheet($sheet, string $maxCol = 'F'): int {
 /**
  * Tanda tangan mengetahui Ketua Pengadilan Agama di pojok kanan bawah
  */
-function addTandaTanganKetua($sheet, int $startRow, string $col = 'D'): int {
+function addTandaTanganKetua($sheet, $startRow, $col = 'D') {
     $row = $startRow + 2; // Spasi pemisah
 
     $sheet->setCellValue("{$col}{$row}", 'Mengetahui,');
@@ -179,7 +179,7 @@ if ($type === 'rapat') {
     // =========================================================================
     // EXPORT REKAP PRESENSI RAPAT / ACARA
     // =========================================================================
-    $acara_id = (int)($_GET['acara_id'] ?? 0);
+    $acara_id = isset($_GET['acara_id']) ? (int)$_GET['acara_id'] : 0;
     $active_acara = null;
 
     if ($acara_id > 0) {
@@ -201,9 +201,9 @@ if ($type === 'rapat') {
         $data_presensi = $presensiStmt->fetchAll();
     }
 
-    $namaAcara = $active_acara['nama_acara'] ?? '-';
-    $pinAcara  = $active_acara['pin_acara'] ?? '-';
-    $statusAcara = $active_acara['status'] ?? '-';
+    $namaAcara = isset($active_acara['nama_acara']) ? $active_acara['nama_acara'] : '-';
+    $pinAcara  = isset($active_acara['pin_acara']) ? $active_acara['pin_acara'] : '-';
+    $statusAcara = isset($active_acara['status']) ? $active_acara['status'] : '-';
 
     $startKopRow = addKopSuratToSheet($sheet, 'E');
 
@@ -253,7 +253,7 @@ if ($type === 'rapat') {
             $sheet->getStyle("A{$currentRow}:E{$currentRow}")->applyFromArray($dataBorder);
 
             // Tanda Tangan Image Embed
-            $sigPath = createTempImageFromBase64($row['tanda_tangan'] ?? null, $tempFiles);
+            $sigPath = createTempImageFromBase64(isset($row['tanda_tangan']) ? $row['tanda_tangan'] : null, $tempFiles);
             if ($sigPath && file_exists($sigPath)) {
                 $sheet->getRowDimension($currentRow)->setRowHeight(45);
                 $drawing = new Drawing();
@@ -304,10 +304,10 @@ if ($type === 'rapat') {
     // =========================================================================
     // EXPORT REKAP PRESENSI APEL (PAGI / SORE)
     // =========================================================================
-    $sesi_filter  = $_GET['sesi'] ?? 'semua';
-    $tgl_mulai    = $_GET['tgl_mulai'] ?? '';
-    $tgl_selesai  = $_GET['tgl_selesai'] ?? '';
-    $apel_user_id = (int)($_GET['apel_user_id'] ?? 0);
+    $sesi_filter  = isset($_GET['sesi']) ? $_GET['sesi'] : 'semua';
+    $tgl_mulai    = isset($_GET['tgl_mulai']) ? $_GET['tgl_mulai'] : '';
+    $tgl_selesai  = isset($_GET['tgl_selesai']) ? $_GET['tgl_selesai'] : '';
+    $apel_user_id = isset($_GET['apel_user_id']) ? (int)$_GET['apel_user_id'] : 0;
 
     $sqlApel = "SELECT * FROM presensi_apel WHERE 1=1";
     $paramsApel = [];
@@ -357,25 +357,25 @@ if ($type === 'rapat') {
 
     if (!empty($tgl_mulai) && !empty($tgl_selesai) && $tgl_mulai === $tgl_selesai) {
         $ts = strtotime($tgl_mulai);
-        $wHari = $hariIndo[date('N', $ts)] ?? '';
+        $wHari = isset($hariIndo[date('N', $ts)]) ? $hariIndo[date('N', $ts)] : '';
         $d = date('j', $ts);
-        $m = $bulanIndo[date('m', $ts)] ?? '';
+        $m = isset($bulanIndo[date('m', $ts)]) ? $bulanIndo[date('m', $ts)] : '';
         $y = date('Y', $ts);
         $hariTanggalText = ":   {$wHari},  {$d} {$m} {$y}";
     } elseif (!empty($tgl_mulai) || !empty($tgl_selesai)) {
         $hariTanggalText = ":   " . ($tgl_mulai ?: 'Awal') . " s/d " . ($tgl_selesai ?: 'Sekarang');
     } elseif (!empty($data_presensi_apel)) {
         $ts = strtotime($data_presensi_apel[0]['tanggal']);
-        $wHari = $hariIndo[date('N', $ts)] ?? '';
+        $wHari = isset($hariIndo[date('N', $ts)]) ? $hariIndo[date('N', $ts)] : '';
         $d = date('j', $ts);
-        $m = $bulanIndo[date('m', $ts)] ?? '';
+        $m = isset($bulanIndo[date('m', $ts)]) ? $bulanIndo[date('m', $ts)] : '';
         $y = date('Y', $ts);
         $hariTanggalText = ":   {$wHari},  {$d} {$m} {$y}";
     } else {
         $ts = time();
-        $wHari = $hariIndo[date('N', $ts)] ?? '';
+        $wHari = isset($hariIndo[date('N', $ts)]) ? $hariIndo[date('N', $ts)] : '';
         $d = date('j', $ts);
-        $m = $bulanIndo[date('m', $ts)] ?? '';
+        $m = isset($bulanIndo[date('m', $ts)]) ? $bulanIndo[date('m', $ts)] : '';
         $y = date('Y', $ts);
         $hariTanggalText = ":   {$wHari},  {$d} {$m} {$y}";
     }
@@ -464,7 +464,7 @@ if ($type === 'rapat') {
             $sheet->getStyle("A{$currentRow}:F{$currentRow}")->getFont()->setName('Arial')->setSize(9.5);
 
             // Tanda Tangan Image Embed
-            $sigPath = createTempImageFromBase64($row['tanda_tangan'] ?? null, $tempFiles);
+            $sigPath = createTempImageFromBase64(isset($row['tanda_tangan']) ? $row['tanda_tangan'] : null, $tempFiles);
             if ($sigPath && file_exists($sigPath)) {
                 $sheet->getRowDimension($currentRow)->setRowHeight(44);
                 $drawing = new Drawing();
@@ -510,9 +510,9 @@ if ($type === 'rapat') {
     // =========================================================================
     // EXPORT REKAP ABSENSI HARIAN
     // =========================================================================
-    $harian_tgl_mulai   = $_GET['harian_tgl_mulai'] ?? '';
-    $harian_tgl_selesai = $_GET['harian_tgl_selesai'] ?? '';
-    $harian_user_id     = (int)($_GET['harian_user_id'] ?? 0);
+    $harian_tgl_mulai   = isset($_GET['harian_tgl_mulai']) ? $_GET['harian_tgl_mulai'] : '';
+    $harian_tgl_selesai = isset($_GET['harian_tgl_selesai']) ? $_GET['harian_tgl_selesai'] : '';
+    $harian_user_id     = isset($_GET['harian_user_id']) ? (int)$_GET['harian_user_id'] : 0;
 
     $sqlHarian = "SELECT h.*, u.nama, u.jabatan, u.nip FROM absensi_harian h JOIN users u ON h.user_id = u.id WHERE 1=1";
     $paramsHarian = [];

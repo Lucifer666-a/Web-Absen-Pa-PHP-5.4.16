@@ -18,14 +18,23 @@ require_once __DIR__ . '/../config/database.php';
 $tokenPayload = verifyApiAuth($pdo, 'access');
 
 // Ambil user_id dari GET, POST JSON, atau dari Token Payload
-$user_id = (int)($_GET['user_id'] ?? $_GET['userId'] ?? 0);
+$user_id = 0;
+if (isset($_GET['user_id'])) {
+    $user_id = (int)$_GET['user_id'];
+} elseif (isset($_GET['userId'])) {
+    $user_id = (int)$_GET['userId'];
+}
 
 if ($user_id <= 0) {
     $rawInput = file_get_contents('php://input');
     $rawInput = ltrim($rawInput, "\xEF\xBB\xBF");
     $input    = json_decode($rawInput, true);
     if (is_array($input)) {
-        $user_id = (int)($input['user_id'] ?? $input['userId'] ?? 0);
+        if (isset($input['user_id'])) {
+            $user_id = (int)$input['user_id'];
+        } elseif (isset($input['userId'])) {
+            $user_id = (int)$input['userId'];
+        }
     }
 }
 
@@ -35,10 +44,10 @@ if ($user_id <= 0 && isset($tokenPayload['user_id'])) {
 
 if ($user_id <= 0) {
     http_response_code(400);
-    echo json_encode([
+    echo json_encode(array(
         'status'  => 'error',
         'message' => 'Parameter user_id tidak valid.'
-    ]);
+    ));
     exit;
 }
 
@@ -47,52 +56,52 @@ $today = date('Y-m-d');
 try {
     // 1. Cek Profil User
     $stmtUser = $pdo->prepare("SELECT id, nip, nama, jabatan, username FROM users WHERE id = ? LIMIT 1");
-    $stmtUser->execute([$user_id]);
+    $stmtUser->execute(array($user_id));
     $user = $stmtUser->fetch(PDO::FETCH_ASSOC);
 
     if (!$user) {
         http_response_code(404);
-        echo json_encode([
+        echo json_encode(array(
             'status'  => 'error',
             'message' => 'User tidak ditemukan.'
-        ]);
+        ));
         exit;
     }
 
     // 2. Cek Status Apel Hari Ini
     $stmtApelPagi = $pdo->prepare("SELECT id, waktu, tanda_tangan FROM presensi_apel WHERE user_id = ? AND tanggal = ? AND sesi = 'pagi' LIMIT 1");
-    $stmtApelPagi->execute([$user_id, $today]);
+    $stmtApelPagi->execute(array($user_id, $today));
     $apelPagi = $stmtApelPagi->fetch(PDO::FETCH_ASSOC);
 
     $stmtApelSore = $pdo->prepare("SELECT id, waktu, tanda_tangan FROM presensi_apel WHERE user_id = ? AND tanggal = ? AND sesi = 'sore' LIMIT 1");
-    $stmtApelSore->execute([$user_id, $today]);
+    $stmtApelSore->execute(array($user_id, $today));
     $apelSore = $stmtApelSore->fetch(PDO::FETCH_ASSOC);
 
     // 2.b Cek Status Absensi Harian Hari Ini (Check-in & Check-out)
     $stmtHarian = $pdo->prepare("SELECT waktu_checkin, waktu_checkout FROM absensi_harian WHERE user_id = ? AND tanggal = ? LIMIT 1");
-    $stmtHarian->execute([$user_id, $today]);
+    $stmtHarian->execute(array($user_id, $today));
     $absensiHarian = $stmtHarian->fetch(PDO::FETCH_ASSOC);
 
-    $absensiHarianHariIni = [
-        'checkin'        => $absensiHarian['waktu_checkin'] ?? null,
-        'checkout'       => $absensiHarian['waktu_checkout'] ?? null,
-        'status_checkin' => $absensiHarian['status_checkin'] ?? null
-    ];
+    $absensiHarianHariIni = array(
+        'checkin'        => isset($absensiHarian['waktu_checkin']) ? $absensiHarian['waktu_checkin'] : null,
+        'checkout'       => isset($absensiHarian['waktu_checkout']) ? $absensiHarian['waktu_checkout'] : null,
+        'status_checkin' => isset($absensiHarian['status_checkin']) ? $absensiHarian['status_checkin'] : null
+    );
 
-    $statusHariIni = [
+    $statusHariIni = array(
         'tanggal'                => $today,
         'absensi_harian_hari_ini' => $absensiHarianHariIni,
-        'apel_pagi'              => [
+        'apel_pagi'              => array(
             'sudah_absen'  => !empty($apelPagi),
-            'waktu'        => $apelPagi['waktu'] ?? null,
-            'tanda_tangan' => $apelPagi['tanda_tangan'] ?? null
-        ],
-        'apel_sore'              => [
+            'waktu'        => isset($apelPagi['waktu']) ? $apelPagi['waktu'] : null,
+            'tanda_tangan' => isset($apelPagi['tanda_tangan']) ? $apelPagi['tanda_tangan'] : null
+        ),
+        'apel_sore'              => array(
             'sudah_absen'  => !empty($apelSore),
-            'waktu'        => $apelSore['waktu'] ?? null,
-            'tanda_tangan' => $apelSore['tanda_tangan'] ?? null
-        ]
-    ];
+            'waktu'        => isset($apelSore['waktu']) ? $apelSore['waktu'] : null,
+            'tanda_tangan' => isset($apelSore['tanda_tangan']) ? $apelSore['tanda_tangan'] : null
+        )
+    );
 
     // 3. Ambil Riwayat Keseluruhan (Apel + Rapat + Harian) milik user_id
     // Query Harian
@@ -106,7 +115,7 @@ try {
         FROM absensi_harian 
         WHERE user_id = ?
     ");
-    $stmtRiwayatHarian->execute([$user_id]);
+    $stmtRiwayatHarian->execute(array($user_id));
     $riwayatHarian = $stmtRiwayatHarian->fetchAll(PDO::FETCH_ASSOC);
 
     // Query Apel
@@ -120,7 +129,7 @@ try {
         FROM presensi_apel 
         WHERE user_id = ?
     ");
-    $stmtRiwayatApel->execute([$user_id]);
+    $stmtRiwayatApel->execute(array($user_id));
     $riwayatApel = $stmtRiwayatApel->fetchAll(PDO::FETCH_ASSOC);
 
     // Query Rapat / Acara
@@ -135,17 +144,22 @@ try {
         JOIN acara a ON p.acara_id = a.id
         WHERE p.user_id = ?
     ");
-    $stmtRiwayatRapat->execute([$user_id]);
+    $stmtRiwayatRapat->execute(array($user_id));
     $riwayatRapat = $stmtRiwayatRapat->fetchAll(PDO::FETCH_ASSOC);
 
     // Gabungkan & urutkan descending berdasarkan created_at
     $semuaRiwayat = array_merge($riwayatHarian, $riwayatApel, $riwayatRapat);
     usort($semuaRiwayat, function ($a, $b) {
-        return strtotime($b['created_at']) <=> strtotime($a['created_at']);
+        $t1 = strtotime($b['created_at']);
+        $t2 = strtotime($a['created_at']);
+        if ($t1 == $t2) {
+            return 0;
+        }
+        return ($t1 < $t2) ? -1 : 1;
     });
 
     // Apel bulan ini (untuk chip di beranda). Opsional ?bulan=2026-10
-    $bulan = $_GET['bulan'] ?? date('Y-m');
+    $bulan = isset($_GET['bulan']) ? $_GET['bulan'] : date('Y-m');
     if (!preg_match('/^\d{4}-\d{2}$/', $bulan)) { $bulan = date('Y-m'); }
     $awal  = $bulan . '-01';
     $akhir = date('Y-m-t', strtotime($awal));
@@ -155,9 +169,9 @@ try {
         WHERE user_id = ? AND tanggal BETWEEN ? AND ?
         ORDER BY tanggal
     ");
-    $stmtApelBulan->execute([$user_id, $awal, $akhir]);
+    $stmtApelBulan->execute(array($user_id, $awal, $akhir));
 
-    $apelBulanIni = ['bulan' => $bulan, 'pagi' => [], 'sore' => []];
+    $apelBulanIni = array('bulan' => $bulan, 'pagi' => array(), 'sore' => array());
     foreach ($stmtApelBulan->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $sesi = strtolower($r['sesi']);
         if (isset($apelBulanIni[$sesi])) {
@@ -166,30 +180,30 @@ try {
     }
 
     http_response_code(200);
-    echo json_encode([
+    echo json_encode(array(
         'status'                  => 'success',
         'user_id'                 => (int)$user['id'],
         'nama'                    => $user['nama'],
         'jabatan'                 => $user['jabatan'],
         'username'                => $user['username'],
-        'user'                    => [
+        'user'                    => array(
             'id'       => (int)$user['id'],
             'user_id'  => (int)$user['id'],
             'nip'      => $user['nip'],
             'nama'     => $user['nama'],
             'jabatan'  => $user['jabatan'],
             'username' => $user['username']
-        ],
+        ),
         'absensi_harian_hari_ini' => $absensiHarianHariIni,
         'status_hari_ini'         => $statusHariIni,
         'riwayat_terbaru'         => array_values($semuaRiwayat),
         'apel_bulan_ini'          => $apelBulanIni
-    ]);
+    ));
 
 } catch (\Exception $e) {
     http_response_code(500);
-    echo json_encode([
+    echo json_encode(array(
         'status'  => 'error',
         'message' => 'Server error: ' . $e->getMessage()
-    ]);
+    ));
 }

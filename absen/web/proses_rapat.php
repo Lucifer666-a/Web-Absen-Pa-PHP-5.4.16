@@ -26,10 +26,10 @@ $jabatan = $pegawai['jabatan'];
 
 // Hanya acara_id, pin, tanda_tangan dari POST
 $acara_id     = !empty($_POST['acara_id']) ? (int)$_POST['acara_id'] : 0;
-$pin          = trim($_POST['pin'] ?? '');
-$tanda_tangan = trim($_POST['tanda_tangan'] ?? '');
+$pin          = trim(isset($_POST['pin']) ? $_POST['pin'] : '');
+$tanda_tangan = trim(isset($_POST['tanda_tangan']) ? $_POST['tanda_tangan'] : '');
 
-function redirectWithError($msg, $oldData = []) {
+function redirectWithError($msg, $oldData = array()) {
     $_SESSION['flash_error'] = $msg;
     $_SESSION['flash_old']   = $oldData;
     header("Location: absen_rapat.php");
@@ -56,7 +56,7 @@ try {
     }
 
     // Rate limiting PIN salah (5x dalam 15 menit) berdasarkan IP
-    $client_ip = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+    $client_ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '127.0.0.1';
     $stmtAttempt = $pdo->prepare("SELECT attempts, TIMESTAMPDIFF(MINUTE, last_attempt, NOW()) AS minutes_ago FROM pin_attempts WHERE ip_address = ? LIMIT 1");
     $stmtAttempt->execute([$client_ip]);
     $attemptData = $stmtAttempt->fetch(PDO::FETCH_ASSOC);
@@ -92,9 +92,9 @@ try {
 
     // Insert ke tabel presensi
     $stmt = $pdo->prepare("INSERT INTO presensi (acara_id, user_id, nama, jabatan, tanda_tangan) VALUES (?, ?, ?, ?, ?)");
-    $stmt->execute([$acara_id, $user_id, $nama, $jabatan, $tanda_tangan]);
+    $stmt->execute(array($acara_id, $user_id, $nama, $jabatan, $tanda_tangan));
 
-    $_SESSION['absen_success'] = [
+    $_SESSION['absen_success'] = array(
         'tipe'         => 'rapat',
         'nama'         => $nama,
         'jabatan'      => $jabatan,
@@ -102,7 +102,7 @@ try {
         'tanggal'      => date('Y-m-d'),
         'waktu'        => date('H:i:s'),
         'tanda_tangan' => $tanda_tangan,
-    ];
+    );
 
     header("Location: success.php");
     exit;

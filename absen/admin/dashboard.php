@@ -14,7 +14,7 @@ $api_absen_url = $api_base_url . 'absen.php';
 $api_apel_url  = $api_base_url . 'absen_apel.php';
 
 // Tentukan Tab Aktif: 'rapat', 'apel', 'harian', 'rekap', 'users', atau 'pengaturan'
-$active_tab = $_GET['tab'] ?? 'rapat';
+$active_tab = isset($_GET['tab']) ? $_GET['tab'] : 'rapat';
 if (!in_array($active_tab, ['rapat', 'apel', 'harian', 'rekap', 'users', 'pengaturan'], true)) {
     $active_tab = 'rapat';
 }
@@ -28,7 +28,7 @@ $total_users = count($list_users);
 // DATA TAB 1: PRESENSI RAPAT / ACARA (Jika tab rapat)
 // ----------------------------------------------------
 $list_acara = [];
-$selected_acara_id = $_GET['acara_id'] ?? null;
+$selected_acara_id = isset($_GET['acara_id']) ? $_GET['acara_id'] : null;
 $active_acara = null;
 $data_presensi = [];
 $total_hadir = 0;
@@ -59,10 +59,10 @@ if ($active_tab === 'rapat') {
 // ----------------------------------------------------
 // DATA TAB 2: PRESENSI APEL (PAGI / SORE) (Jika tab apel)
 // ----------------------------------------------------
-$sesi_filter  = $_GET['sesi'] ?? 'semua';
-$tgl_mulai    = $_GET['tgl_mulai'] ?? '';
-$tgl_selesai  = $_GET['tgl_selesai'] ?? '';
-$apel_user_id = (int)($_GET['apel_user_id'] ?? 0);
+$sesi_filter  = isset($_GET['sesi']) ? $_GET['sesi'] : 'semua';
+$tgl_mulai    = isset($_GET['tgl_mulai']) ? $_GET['tgl_mulai'] : '';
+$tgl_selesai  = isset($_GET['tgl_selesai']) ? $_GET['tgl_selesai'] : '';
+$apel_user_id = isset($_GET['apel_user_id']) ? (int)$_GET['apel_user_id'] : 0;
 $data_presensi_apel = [];
 $total_apel = 0;
 
@@ -106,9 +106,9 @@ if ($active_tab === 'apel') {
 // ----------------------------------------------------
 // DATA TAB 3: ABSENSI HARIAN (Jika tab harian)
 // ----------------------------------------------------
-$harian_tgl_mulai   = $_GET['harian_tgl_mulai'] ?? '';
-$harian_tgl_selesai = $_GET['harian_tgl_selesai'] ?? '';
-$harian_user_id     = (int)($_GET['harian_user_id'] ?? 0);
+$harian_tgl_mulai   = isset($_GET['harian_tgl_mulai']) ? $_GET['harian_tgl_mulai'] : '';
+$harian_tgl_selesai = isset($_GET['harian_tgl_selesai']) ? $_GET['harian_tgl_selesai'] : '';
+$harian_user_id     = isset($_GET['harian_user_id']) ? (int)$_GET['harian_user_id'] : 0;
 $data_presensi_harian = [];
 $total_harian = 0;
 
@@ -139,11 +139,11 @@ if ($active_tab === 'harian') {
 // ----------------------------------------------------
 // DATA TAB 4: REKAP BULANAN & DAFTAR TIDAK HADIR (Jika tab rekap)
 // ----------------------------------------------------
-$rekap_bulan = $_GET['rekap_bulan'] ?? date('Y-m');
+$rekap_bulan = isset($_GET['rekap_bulan']) ? $_GET['rekap_bulan'] : date('Y-m');
 if (!preg_match('/^\d{4}-\d{2}$/', $rekap_bulan)) {
     $rekap_bulan = date('Y-m');
 }
-$rekap_tgl_absent = $_GET['rekap_tgl_absent'] ?? date('Y-m-d');
+$rekap_tgl_absent = isset($_GET['rekap_tgl_absent']) ? $_GET['rekap_tgl_absent'] : date('Y-m-d');
 $data_rekap_pegawai = [];
 $data_absent_apel = [];
 
@@ -165,12 +165,12 @@ if ($active_tab === 'rekap') {
     $soreByUser = []; $soreByNama = [];
     foreach ($apelAgg as $r) {
         if ($r['uid'] > 0) {
-            $pagiByUser[$r['uid']] = ($pagiByUser[$r['uid']] ?? 0) + (int)$r['cnt_pagi'];
-            $soreByUser[$r['uid']] = ($soreByUser[$r['uid']] ?? 0) + (int)$r['cnt_sore'];
+            $pagiByUser[$r['uid']] = (isset($pagiByUser[$r['uid']]) ? $pagiByUser[$r['uid']] : 0) + (int)$r['cnt_pagi'];
+            $soreByUser[$r['uid']] = (isset($soreByUser[$r['uid']]) ? $soreByUser[$r['uid']] : 0) + (int)$r['cnt_sore'];
         }
         if (!empty($r['nama'])) {
-            $pagiByNama[$r['nama']] = ($pagiByNama[$r['nama']] ?? 0) + (int)$r['cnt_pagi'];
-            $soreByNama[$r['nama']] = ($soreByNama[$r['nama']] ?? 0) + (int)$r['cnt_sore'];
+            $pagiByNama[$r['nama']] = (isset($pagiByNama[$r['nama']]) ? $pagiByNama[$r['nama']] : 0) + (int)$r['cnt_pagi'];
+            $soreByNama[$r['nama']] = (isset($soreByNama[$r['nama']]) ? $soreByNama[$r['nama']] : 0) + (int)$r['cnt_sore'];
         }
     }
 
@@ -186,10 +186,10 @@ if ($active_tab === 'rekap') {
     $rapatByUser = []; $rapatByNama = [];
     foreach ($rapatAgg as $r) {
         if ($r['uid'] > 0) {
-            $rapatByUser[$r['uid']] = ($rapatByUser[$r['uid']] ?? 0) + (int)$r['cnt_rapat'];
+            $rapatByUser[$r['uid']] = (isset($rapatByUser[$r['uid']]) ? $rapatByUser[$r['uid']] : 0) + (int)$r['cnt_rapat'];
         }
         if (!empty($r['nama'])) {
-            $rapatByNama[$r['nama']] = ($rapatByNama[$r['nama']] ?? 0) + (int)$r['cnt_rapat'];
+            $rapatByNama[$r['nama']] = (isset($rapatByNama[$r['nama']]) ? $rapatByNama[$r['nama']] : 0) + (int)$r['cnt_rapat'];
         }
     }
 
@@ -214,10 +214,10 @@ if ($active_tab === 'rekap') {
             'nip'          => $u['nip'],
             'nama'         => $uName,
             'jabatan'      => $u['jabatan'],
-            'total_pagi'   => $pagiByUser[$uid] ?? $pagiByNama[$uName] ?? 0,
-            'total_sore'   => $soreByUser[$uid] ?? $soreByNama[$uName] ?? 0,
-            'total_rapat'  => $rapatByUser[$uid] ?? $rapatByNama[$uName] ?? 0,
-            'total_harian' => $harianByUser[$uid] ?? 0,
+            'total_pagi'   => isset($pagiByUser[$uid]) ? $pagiByUser[$uid] : (isset($pagiByNama[$uName]) ? $pagiByNama[$uName] : 0),
+            'total_sore'   => isset($soreByUser[$uid]) ? $soreByUser[$uid] : (isset($soreByNama[$uName]) ? $soreByNama[$uName] : 0),
+            'total_rapat'  => isset($rapatByUser[$uid]) ? $rapatByUser[$uid] : (isset($rapatByNama[$uName]) ? $rapatByNama[$uName] : 0),
+            'total_harian' => isset($harianByUser[$uid]) ? $harianByUser[$uid] : 0,
         ];
     }
 
@@ -247,15 +247,15 @@ $chart_harian_data = [];
 
 if ($active_tab === 'pengaturan') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_change_admin_pass'])) {
-        $old_pass = $_POST['old_password'] ?? '';
-        $new_pass = $_POST['new_password'] ?? '';
-        $confirm_pass = $_POST['confirm_password'] ?? '';
+        $old_pass = isset($_POST['old_password']) ? $_POST['old_password'] : '';
+        $new_pass = isset($_POST['new_password']) ? $_POST['new_password'] : '';
+        $confirm_pass = isset($_POST['confirm_password']) ? $_POST['confirm_password'] : '';
 
         if (!empty($old_pass) && !empty($new_pass) && !empty($confirm_pass)) {
             if ($new_pass !== $confirm_pass) {
                 $change_pass_msg = 'error_confirm';
             } else {
-                $admin_id = $_SESSION['admin_id'] ?? 0;
+                $admin_id = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 0;
                 $stmtAdm = $pdo->prepare("SELECT password FROM admin WHERE id = ? LIMIT 1");
                 $stmtAdm->execute([$admin_id]);
                 $admData = $stmtAdm->fetch();
@@ -309,7 +309,7 @@ if ($active_tab === 'pengaturan') {
     }
 }
 
-$msg = $_GET['msg'] ?? '';
+$msg = isset($_GET['msg']) ? $_GET['msg'] : '';
 
 // Helper label untuk tab aktif
 $tab_titles = [
@@ -320,7 +320,7 @@ $tab_titles = [
     'users'      => ['title' => 'Data Pegawai / Users', 'icon' => '👥'],
     'pengaturan' => ['title' => 'Pengaturan & Log Aktivitas', 'icon' => '⚙️'],
 ];
-$current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' => '⚡'];
+$current_tab_info = isset($tab_titles[$active_tab]) ? $tab_titles[$active_tab] : array('title' => 'Dashboard', 'icon' => '⚡');
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -899,11 +899,11 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
         <div class="sidebar-user">
             <div class="user-pill">
                 <div class="user-avatar">
-                    <?= strtoupper(substr(htmlspecialchars($_SESSION['admin_nama'] ?? 'A'), 0, 2)) ?>
+                    <?= strtoupper(substr(htmlspecialchars(isset($_SESSION['admin_nama']) ? $_SESSION['admin_nama'] : 'A'), 0, 2)) ?>
                 </div>
                 <div class="user-meta">
-                    <p class="user-name" title="<?= htmlspecialchars($_SESSION['admin_nama'] ?? 'Admin') ?>">
-                        <?= htmlspecialchars($_SESSION['admin_nama'] ?? 'Admin') ?>
+                    <p class="user-name" title="<?= htmlspecialchars(isset($_SESSION['admin_nama']) ? $_SESSION['admin_nama'] : 'Admin') ?>">
+                        <?= htmlspecialchars(isset($_SESSION['admin_nama']) ? $_SESSION['admin_nama'] : 'Admin') ?>
                     </p>
                     <p class="user-role">Administrator</p>
                 </div>
@@ -1273,7 +1273,7 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
                                             <?php 
                                                 $hariIndo = ['1'=>'Senin', '2'=>'Selasa', '3'=>'Rabu', '4'=>'Kamis', '5'=>'Jumat', '6'=>'Sabtu', '7'=>'Minggu'];
                                                 $numHari = date('N', strtotime($row['tanggal']));
-                                                $namaHari = $hariIndo[$numHari] ?? '';
+                                                $namaHari = isset($hariIndo[$numHari]) ? $hariIndo[$numHari] : '';
                                             ?>
                                             <?php if ($row['sesi'] === 'pagi'): ?>
                                                 <span class="badge bg-primary">🌅 Pagi (<?= $namaHari ?>)</span>
@@ -1542,7 +1542,7 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
                                         <td><?= htmlspecialchars($user['jabatan']) ?></td>
                                         <td><span class="badge bg-dark border text-light"><?= htmlspecialchars($user['username']) ?></span></td>
                                         <td>
-                                            <?php if ((int)($user['is_active'] ?? 1) === 1): ?>
+                                            <?php if ((int)(isset($user['is_active']) ? $user['is_active'] : 1) === 1): ?>
                                                 <span class="badge bg-success-subtle text-success border">Aktif</span>
                                             <?php else: ?>
                                                 <span class="badge bg-danger-subtle text-danger border">Nonaktif</span>
@@ -1557,8 +1557,8 @@ $current_tab_info = $tab_titles[$active_tab] ?? ['title' => 'Dashboard', 'icon' 
                                                 <?= csrfField() ?>
                                                 <input type="hidden" name="action" value="toggle_active">
                                                 <input type="hidden" name="user_id" value="<?= $user['id'] ?>">
-                                                <button type="submit" class="btn btn-sm <?= ((int)($user['is_active'] ?? 1) === 1) ? 'btn-outline-warning' : 'btn-outline-success' ?>">
-                                                    <?= ((int)($user['is_active'] ?? 1) === 1) ? 'Nonaktifkan' : 'Aktifkan' ?>
+                                                <button type="submit" class="btn btn-sm <?= ((int)(isset($user['is_active']) ? $user['is_active'] : 1) === 1) ? 'btn-outline-warning' : 'btn-outline-success' ?>">
+                                                    <?= ((int)(isset($user['is_active']) ? $user['is_active'] : 1) === 1) ? 'Nonaktifkan' : 'Aktifkan' ?>
                                                 </button>
                                             </form>
                                         </td>
@@ -2051,7 +2051,7 @@ function openPreviewFotoModal(fotoSrc, nama, tanggal) {
 // ---------------- Export Excel Handlers (Server-Side with Image Embedding) ----------------
 function exportToExcel() {
     var acaraSelect = document.querySelector('select[name="acara_id"]');
-    var acaraId = acaraSelect ? acaraSelect.value : '<?= (int)($selected_acara_id ?? 0) ?>';
+    var acaraId = acaraSelect ? acaraSelect.value : '<?= (int)(isset($selected_acara_id) ? $selected_acara_id : 0) ?>';
     window.location.href = 'export_excel.php?type=rapat&acara_id=' + encodeURIComponent(acaraId);
 }
 
@@ -2133,9 +2133,9 @@ document.addEventListener("DOMContentLoaded", function () {
 let lastPresensiId = 0;
 let lastApelId     = 0;
 let lastHarianId   = 0;
-let totalHadirCount = <?= (int)($total_hadir ?? 0) ?>;
-const totalUsersCount = <?= (int)($total_users ?? 0) ?>;
-const selectedAcaraId = <?= (int)($selected_acara_id ?? 0) ?>;
+let totalHadirCount = <?= (int)(isset($total_hadir) ? $total_hadir : 0) ?>;
+const totalUsersCount = <?= (int)(isset($total_users) ? $total_users : 0) ?>;
+const selectedAcaraId = <?= (int)(isset($selected_acara_id) ? $selected_acara_id : 0) ?>;
 
 function playChime() {
     try {

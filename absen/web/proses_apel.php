@@ -25,13 +25,13 @@ $nama     = $pegawai['nama'];
 $jabatan  = $pegawai['jabatan'];
 
 // Hanya sesi & tanda tangan yang dari POST
-$sesi         = strtolower(trim($_POST['sesi'] ?? ''));
-$tanda_tangan = trim($_POST['tanda_tangan'] ?? '');
+$sesi         = strtolower(trim(isset($_POST['sesi']) ? $_POST['sesi'] : ''));
+$tanda_tangan = trim(isset($_POST['tanda_tangan']) ? $_POST['tanda_tangan'] : '');
 
 $tanggal = date('Y-m-d');
 $waktu   = date('H:i:s');
 
-function redirectWithError($msg, $oldData = []) {
+function redirectWithError($msg, $oldData = array()) {
     $_SESSION['flash_error'] = $msg;
     $_SESSION['flash_old']   = $oldData;
     header("Location: absen_apel.php");
@@ -79,7 +79,7 @@ try {
     $stmt = $pdo->prepare("INSERT INTO presensi_apel (user_id, nama, jabatan, tanda_tangan, sesi, tanggal, waktu) VALUES (?, ?, ?, ?, ?, ?, ?)");
     $stmt->execute([$user_id, $nama, $jabatan, $tanda_tangan, $sesi, $tanggal, $waktu]);
 
-    $_SESSION['absen_success'] = [
+    $_SESSION['absen_success'] = array(
         'tipe'         => 'apel',
         'nama'         => $nama,
         'jabatan'      => $jabatan,
@@ -87,7 +87,7 @@ try {
         'tanggal'      => $tanggal,
         'waktu'        => $waktu,
         'tanda_tangan' => $tanda_tangan,
-    ];
+    );
 
     header("Location: success.php");
     exit;

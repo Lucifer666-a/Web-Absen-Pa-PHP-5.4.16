@@ -14,7 +14,7 @@ function generateCsrfToken() {
         session_start();
     }
     if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        $_SESSION['csrf_token'] = bin2hex(openssl_random_pseudo_bytes(32));
     }
     return $_SESSION['csrf_token'];
 }
@@ -35,16 +35,30 @@ function verifyCsrfToken($token = null) {
     }
 
     if ($token === null) {
-        $token = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+        if (isset($_POST['csrf_token'])) {
+            $token = $_POST['csrf_token'];
+        } elseif (isset($_SERVER['HTTP_X_CSRF_TOKEN'])) {
+            $token = $_SERVER['HTTP_X_CSRF_TOKEN'];
+        } else {
+            $token = '';
+        }
     }
 
-    $sessionToken = $_SESSION['csrf_token'] ?? '';
+    $sessionToken = isset($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : '';
 
     if (empty($sessionToken) || empty($token)) {
         return false;
     }
 
-    return hash_equals($sessionToken, $token);
+    // Timing-safe comparison (pengganti hash_equals yang tidak ada di PHP 5.4)
+    if (strlen($sessionToken) !== strlen($token)) {
+        return false;
+    }
+    $result = 0;
+    for ($i = 0; $i < strlen($sessionToken); $i++) {
+        $result |= ord($sessionToken[$i]) ^ ord($token[$i]);
+    }
+    return $result === 0;
 }
 
 /**

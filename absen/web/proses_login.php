@@ -24,11 +24,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // Enforce CSRF
 enforceCsrfCheck();
 
-$username = trim($_POST['username'] ?? '');
-$password = $_POST['password'] ?? '';
+$username = trim(isset($_POST['username']) ? $_POST['username'] : '');
+$password = isset($_POST['password']) ? $_POST['password'] : '';
 
 // Helper redirect error
-function redirectLoginError($msg, $oldData = []) {
+function redirectLoginError($msg, $oldData = array()) {
     $_SESSION['flash_error'] = $msg;
     $_SESSION['flash_old']   = $oldData;
     header("Location: login.php");
@@ -48,17 +48,17 @@ try {
 
     if (!$user) {
         // Username tidak ditemukan — jangan bocorkan info spesifik
-        redirectLoginError("Username atau password salah. Silakan periksa kembali.", ['username' => $username]);
+        redirectLoginError("Username atau password salah. Silakan periksa kembali.", array('username' => $username));
     }
 
     // Cek apakah akun aktif
     if ((int)$user['is_active'] === 0) {
-        redirectLoginError("Akun Anda telah dinonaktifkan. Hubungi administrator untuk informasi lebih lanjut.", ['username' => $username]);
+        redirectLoginError("Akun Anda telah dinonaktifkan. Hubungi administrator untuk informasi lebih lanjut.", array('username' => $username));
     }
 
     // Verifikasi password
     if (!password_verify($password, $user['password'])) {
-        redirectLoginError("Username atau password salah. Silakan periksa kembali.", ['username' => $username]);
+        redirectLoginError("Username atau password salah. Silakan periksa kembali.", array('username' => $username));
     }
 
     // Login berhasil — regenerate session ID untuk keamanan
@@ -69,7 +69,7 @@ try {
     $_SESSION['pegawai_id']        = (int)$user['id'];
     $_SESSION['pegawai_nama']      = $user['nama'];
     $_SESSION['pegawai_jabatan']   = $user['jabatan'];
-    $_SESSION['pegawai_nip']       = $user['nip'] ?? '';
+    $_SESSION['pegawai_nip']       = isset($user['nip']) ? $user['nip'] : '';
     $_SESSION['pegawai_username']  = $user['username'];
 
     // Redirect ke portal

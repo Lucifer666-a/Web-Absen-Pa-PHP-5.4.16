@@ -9,15 +9,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 enforceCsrfCheck();
 
-$action = $_POST['action'] ?? '';
+$action = isset($_POST['action']) ? $_POST['action'] : '';
 
 try {
     if ($action === 'create') {
-        $nip      = trim($_POST['nip'] ?? '');
-        $nama     = trim($_POST['nama'] ?? '');
-        $jabatan  = trim($_POST['jabatan'] ?? '');
-        $username = trim($_POST['username'] ?? '');
-        $password = trim($_POST['password'] ?? '');
+        $nip      = trim(isset($_POST['nip']) ? $_POST['nip'] : '');
+        $nama     = trim(isset($_POST['nama']) ? $_POST['nama'] : '');
+        $jabatan  = trim(isset($_POST['jabatan']) ? $_POST['jabatan'] : '');
+        $username = trim(isset($_POST['username']) ? $_POST['username'] : '');
+        $password = trim(isset($_POST['password']) ? $_POST['password'] : '');
 
         if ($nama === '' || $jabatan === '' || $username === '' || $password === '') {
             header("Location: dashboard.php?tab=users&msg=error_fields");
@@ -39,7 +39,7 @@ try {
         $hashPassword = password_hash($password, PASSWORD_DEFAULT);
 
         $stmt = $pdo->prepare("INSERT INTO users (nip, nama, jabatan, username, password, is_active) VALUES (?, ?, ?, ?, ?, 1)");
-        $stmt->execute([$nip ?: null, $nama, $jabatan, $username, $hashPassword]);
+        $stmt->execute(array($nip ? $nip : null, $nama, $jabatan, $username, $hashPassword));
         logAdminActivity($pdo, 'Tambah Pegawai', "Pegawai: {$nama} ({$username})");
 
         header("Location: dashboard.php?tab=users&msg=success");
@@ -47,12 +47,12 @@ try {
     }
 
     if ($action === 'edit') {
-        $id       = (int)($_POST['user_id'] ?? 0);
-        $nip      = trim($_POST['nip'] ?? '');
-        $nama     = trim($_POST['nama'] ?? '');
-        $jabatan  = trim($_POST['jabatan'] ?? '');
-        $username = trim($_POST['username'] ?? '');
-        $password = trim($_POST['password'] ?? '');
+        $id       = (int)(isset($_POST['user_id']) ? $_POST['user_id'] : 0);
+        $nip      = trim(isset($_POST['nip']) ? $_POST['nip'] : '');
+        $nama     = trim(isset($_POST['nama']) ? $_POST['nama'] : '');
+        $jabatan  = trim(isset($_POST['jabatan']) ? $_POST['jabatan'] : '');
+        $username = trim(isset($_POST['username']) ? $_POST['username'] : '');
+        $password = trim(isset($_POST['password']) ? $_POST['password'] : '');
         $is_active = isset($_POST['is_active']) ? 1 : 0;
 
         if ($id <= 0 || $nama === '' || $jabatan === '' || $username === '') {
@@ -75,11 +75,11 @@ try {
         if ($password !== '') {
             $hashPassword = password_hash($password, PASSWORD_DEFAULT);
             $stmt = $pdo->prepare("UPDATE users SET nip = ?, nama = ?, jabatan = ?, username = ?, password = ?, is_active = ? WHERE id = ?");
-            $stmt->execute([$nip ?: null, $nama, $jabatan, $username, $hashPassword, $is_active, $id]);
+            $stmt->execute(array($nip ? $nip : null, $nama, $jabatan, $username, $hashPassword, $is_active, $id));
             logAdminActivity($pdo, 'Edit & Reset Password Pegawai', "Pegawai ID: {$id} ({$nama})");
         } else {
             $stmt = $pdo->prepare("UPDATE users SET nip = ?, nama = ?, jabatan = ?, username = ?, is_active = ? WHERE id = ?");
-            $stmt->execute([$nip ?: null, $nama, $jabatan, $username, $is_active, $id]);
+            $stmt->execute(array($nip ? $nip : null, $nama, $jabatan, $username, $is_active, $id));
             logAdminActivity($pdo, 'Edit Pegawai', "Pegawai ID: {$id} ({$nama})");
         }
 
@@ -88,17 +88,17 @@ try {
     }
 
     if ($action === 'toggle_active') {
-        $id = (int)($_POST['user_id'] ?? 0);
+        $id = (int)(isset($_POST['user_id']) ? $_POST['user_id'] : 0);
         if ($id > 0) {
             $stmt = $pdo->prepare("UPDATE users SET is_active = IF(is_active=1, 0, 1) WHERE id = ?");
-            $stmt->execute([$id]);
+            $stmt->execute(array($id));
             logAdminActivity($pdo, 'Toggle Active Status Pegawai', "Pegawai ID: {$id}");
         }
         header("Location: dashboard.php?tab=users&msg=success");
         exit;
     }
 
-} catch (\PDOException $e) {
+} catch (PDOException $e) {
     if (strpos($e->getMessage(), '1062') !== false || strpos($e->getMessage(), 'Duplicate entry') !== false) {
         header("Location: dashboard.php?tab=users&msg=error_duplicate");
         exit;

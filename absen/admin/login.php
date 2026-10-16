@@ -13,12 +13,12 @@ $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     enforceCsrfCheck();
-    $username = trim($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
+    $username = isset($_POST['username']) ? trim($_POST['username']) : '';
+    $password = isset($_POST['password']) ? $_POST['password'] : '';
 
     if (!empty($username) && !empty($password)) {
         $stmt = $pdo->prepare("SELECT * FROM admin WHERE username = ? LIMIT 1");
-        $stmt->execute([$username]);
+        $stmt->execute(array($username));
         $admin = $stmt->fetch();
 
         if ($admin && password_verify($password, $admin['password'])) {

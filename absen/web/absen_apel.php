@@ -31,8 +31,8 @@ $dayOfWeek  = (int)date('N');
 $defaultSesi = ($dayOfWeek === 5 || (int)date('H') >= 12) ? 'sore' : 'pagi';
 
 // Flash messages dari proses_apel.php
-$errorMsg = $_SESSION['flash_error'] ?? '';
-$oldSesi  = $_SESSION['flash_old']['sesi'] ?? $defaultSesi;
+$errorMsg = isset($_SESSION['flash_error']) ? $_SESSION['flash_error'] : '';
+$oldSesi  = isset($_SESSION['flash_old']['sesi']) ? $_SESSION['flash_old']['sesi'] : $defaultSesi;
 unset($_SESSION['flash_error'], $_SESSION['flash_old']);
 ?>
 <!DOCTYPE html>

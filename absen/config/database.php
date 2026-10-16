@@ -160,8 +160,8 @@ function logAdminActivity($pdo, $aksi, $detail = '') {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
-    $admin_id   = $_SESSION['admin_id'] ?? null;
-    $admin_nama = $_SESSION['admin_nama'] ?? 'System/Admin';
+    $admin_id   = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : null;
+    $admin_nama = isset($_SESSION['admin_nama']) ? $_SESSION['admin_nama'] : 'System/Admin';
 
     try {
         $stmt = $pdo->prepare("INSERT INTO log_aktivitas (admin_id, admin_nama, aksi, detail) VALUES (?, ?, ?, ?)");

@@ -27,17 +27,18 @@ $tanggalDisplay = "$hariIni, " . date('d') . " " . $bulanIndonesia[date('m')] . 
 $jamDb = date('H:i');
 
 // Flash messages
-$errorMsg = $_SESSION['flash_error'] ?? '';
-$oldInput = $_SESSION['flash_old'] ?? [];
+$errorMsg = isset($_SESSION['flash_error']) ? $_SESSION['flash_error'] : '';
+$oldInput = isset($_SESSION['flash_old']) ? $_SESSION['flash_old'] : array();
 unset($_SESSION['flash_error'], $_SESSION['flash_old']);
 
 // Daftar acara/rapat yang sedang BUKA
-$daftarAcara = [];
+$daftarAcara = array();
 try {
     $stmtAcara = $pdo->query("SELECT id, nama_acara FROM acara WHERE status = 'BUKA' ORDER BY id DESC");
     $daftarAcara = $stmtAcara->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
-    $daftarAcara = [];
+    $daftarAcara = array();
+}
 }
 ?>
 <!DOCTYPE html>
@@ -205,7 +206,7 @@ try {
                     <select class="form-select" id="acara_id" name="acara_id" required>
                         <option value="">-- Pilih Rapat yang Sedang Aktif --</option>
                         <?php foreach ($daftarAcara as $ac): ?>
-                            <option value="<?= $ac['id'] ?>" <?= (($oldInput['acara_id'] ?? '') == $ac['id']) ? 'selected' : '' ?>>
+                            <option value="<?= $ac['id'] ?>" <?= ((isset($oldInput['acara_id']) ? $oldInput['acara_id'] : '') == $ac['id']) ? 'selected' : '' ?>>
                                 📌 <?= htmlspecialchars($ac['nama_acara'], ENT_QUOTES, 'UTF-8') ?>
                             </option>
                         <?php endforeach; ?>

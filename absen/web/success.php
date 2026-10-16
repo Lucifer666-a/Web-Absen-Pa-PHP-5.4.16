@@ -7,7 +7,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // Cek apakah ada data sukses di session
-$successData = $_SESSION['absen_success'] ?? null;
+$successData = isset($_SESSION['absen_success']) ? $_SESSION['absen_success'] : null;
 unset($_SESSION['absen_success']);
 
 // Jika tidak ada data sukses, redirect kembali ke portal utama
@@ -16,20 +16,20 @@ if (!$successData) {
     exit;
 }
 
-$hariIndonesia = [
+$hariIndonesia = array(
     'Sunday' => 'Minggu', 'Monday' => 'Senin', 'Tuesday' => 'Selasa',
     'Wednesday' => 'Rabu', 'Thursday' => 'Kamis', 'Friday' => 'Jumat', 'Saturday' => 'Sabtu'
-];
-$bulanIndonesia = [
+);
+$bulanIndonesia = array(
     '01' => 'Januari', '02' => 'Februari', '03' => 'Maret', '04' => 'April',
     '05' => 'Mei', '06' => 'Juni', '07' => 'Juli', '08' => 'Agustus',
     '09' => 'September', '10' => 'Oktober', '11' => 'November', '12' => 'Desember'
-];
+);
 
 $tglObj = strtotime($successData['tanggal']);
-$hari = $hariIndonesia[date('l', $tglObj)] ?? '';
+$hari = isset($hariIndonesia[date('l', $tglObj)]) ? $hariIndonesia[date('l', $tglObj)] : '';
 $tgl = date('d', $tglObj);
-$bln = $bulanIndonesia[date('m', $tglObj)] ?? '';
+$bln = isset($bulanIndonesia[date('m', $tglObj)]) ? $bulanIndonesia[date('m', $tglObj)] : '';
 $thn = date('Y', $tglObj);
 $tanggalDisplay = "$hari, $tgl $bln $thn";
 

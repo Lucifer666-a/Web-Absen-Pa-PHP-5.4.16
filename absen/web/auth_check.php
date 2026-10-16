@@ -12,12 +12,12 @@ if (empty($_SESSION['pegawai_logged_in']) || $_SESSION['pegawai_logged_in'] !== 
 }
 
 // Helper: ambil data pegawai yang sedang login
-function getPegawaiSession(): array {
-    return [
-        'id'       => (int)($_SESSION['pegawai_id'] ?? 0),
-        'nama'     => $_SESSION['pegawai_nama'] ?? '',
-        'jabatan'  => $_SESSION['pegawai_jabatan'] ?? '',
-        'nip'      => $_SESSION['pegawai_nip'] ?? '',
-        'username' => $_SESSION['pegawai_username'] ?? '',
-    ];
+function getPegawaiSession() {
+    return array(
+        'id'       => (int)(isset($_SESSION['pegawai_id']) ? $_SESSION['pegawai_id'] : 0),
+        'nama'     => isset($_SESSION['pegawai_nama']) ? $_SESSION['pegawai_nama'] : '',
+        'jabatan'  => isset($_SESSION['pegawai_jabatan']) ? $_SESSION['pegawai_jabatan'] : '',
+        'nip'      => isset($_SESSION['pegawai_nip']) ? $_SESSION['pegawai_nip'] : '',
+        'username' => isset($_SESSION['pegawai_username']) ? $_SESSION['pegawai_username'] : '',
+    );
 }

@@ -1,31 +1,18 @@
 <?php
 // absen/admin/events.php
-// Server-Sent Events (SSE) Endpoint for Real-time Attendance Notifications
+// Server-Sent Events (SSE) Endpoint: Mengirim update presensi real-time ke admin dashboard
+// Support PHP 5.4+
 
-// Nonaktifkan batas waktu eksekusi skrip (opsional, batas waktu loop 45 detik)
-set_time_limit(60);
-ignore_user_abort(true);
+require_once 'auth_check.php';
 
-require_once __DIR__ . '/../config/database.php';
-
-// Memastikan hanya admin yang login yang dapat menyambung ke SSE stream
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-    http_response_code(401);
-    header('Content-Type: application/json; charset=UTF-8');
-    echo json_encode(['status' => 'error', 'message' => 'Unauthorized admin session']);
-    exit;
-}
-// Lepas session lock agar request PHP lain (dashboard, API absen, dll) tidak terblokir / timeout
-session_write_close();
-
-// Set Header SSE
-header('Content-Type: text/event-stream; charset=UTF-8');
-header('Cache-Control: no-cache, no-store, must-revalidate');
+// Atur header untuk Server-Sent Events (SSE)
+header('Content-Type: text/event-stream');
+header('Cache-Control: no-cache');
 header('Connection: keep-alive');
-header('X-Accel-Buffering: no');
+header('X-Accel-Buffering: no'); // Disable buffering untuk Nginx
+
+// Cegah script timeout (SSE berjalan loop terus menerus)
+set_time_limit(60);
 
 // Matikan output buffering PHP agar data terkirim secara instan
 while (ob_get_level() > 0) {
@@ -33,34 +20,37 @@ while (ob_get_level() > 0) {
 }
 
 // Inisialisasi ID Terakhir dari query GET (jika ada)
-$last_presensi_id = (int)($_GET['last_presensi_id'] ?? 0);
-$last_apel_id     = (int)($_GET['last_apel_id']     ?? 0);
-$last_harian_id   = (int)($_GET['last_harian_id']   ?? 0);
+$last_presensi_id = isset($_GET['last_presensi_id']) ? (int)$_GET['last_presensi_id'] : 0;
+$last_apel_id     = isset($_GET['last_apel_id']) ? (int)$_GET['last_apel_id'] : 0;
+$last_harian_id   = isset($_GET['last_harian_id']) ? (int)$_GET['last_harian_id'] : 0;
 
 // Jika ID awal belum dikirim (pertama kali connect), ambil ID terbesar saat ini dari DB
 if ($last_presensi_id === 0) {
     $stmt = $pdo->query("SELECT IFNULL(MAX(id), 0) AS max_id FROM presensi");
-    $last_presensi_id = (int)($stmt->fetch()['max_id'] ?? 0);
+    $row = $stmt->fetch();
+    $last_presensi_id = isset($row['max_id']) ? (int)$row['max_id'] : 0;
 }
 
 if ($last_apel_id === 0) {
     $stmt = $pdo->query("SELECT IFNULL(MAX(id), 0) AS max_id FROM presensi_apel");
-    $last_apel_id = (int)($stmt->fetch()['max_id'] ?? 0);
+    $row = $stmt->fetch();
+    $last_apel_id = isset($row['max_id']) ? (int)$row['max_id'] : 0;
 }
 
 if ($last_harian_id === 0) {
     $stmt = $pdo->query("SELECT IFNULL(MAX(id), 0) AS max_id FROM absensi_harian");
-    $last_harian_id = (int)($stmt->fetch()['max_id'] ?? 0);
+    $row = $stmt->fetch();
+    $last_harian_id = isset($row['max_id']) ? (int)$row['max_id'] : 0;
 }
 
 // Kirimkan status inisialisasi awal ke klien
 echo "event: init\n";
-echo "data: " . json_encode([
+echo "data: " . json_encode(array(
     'status'           => 'connected',
     'last_presensi_id' => $last_presensi_id,
     'last_apel_id'     => $last_apel_id,
     'last_harian_id'   => $last_harian_id
-], JSON_UNESCAPED_UNICODE) . "\n\n";
+)) . "\n\n";
 flush();
 
 // Loop SSE selama maks 15 iterasi (~45 detik per koneksi)
@@ -72,9 +62,9 @@ for ($cycle = 0; $cycle < $max_cycles; $cycle++) {
         break;
     }
 
-    $new_presensi = [];
-    $new_apel     = [];
-    $new_harian   = [];
+    $new_presensi = array();
+    $new_apel     = array();
+    $new_harian   = array();
 
     // 1. Cek Presensi Acara/Rapat baru
     $stmt = $pdo->prepare("
@@ -84,11 +74,12 @@ for ($cycle = 0; $cycle < $max_cycles; $cycle++) {
         WHERE p.id > ?
         ORDER BY p.id ASC
     ");
-    $stmt->execute([$last_presensi_id]);
+    $stmt->execute(array($last_presensi_id));
     $new_presensi = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     if (!empty($new_presensi)) {
-        $last_presensi_id = (int)end($new_presensi)['id'];
+        $lastItem = end($new_presensi);
+        $last_presensi_id = (int)$lastItem['id'];
     }
 
     // 2. Cek Presensi Apel baru
@@ -98,11 +89,12 @@ for ($cycle = 0; $cycle < $max_cycles; $cycle++) {
         WHERE id > ?
         ORDER BY id ASC
     ");
-    $stmt->execute([$last_apel_id]);
+    $stmt->execute(array($last_apel_id));
     $new_apel = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     if (!empty($new_apel)) {
-        $last_apel_id = (int)end($new_apel)['id'];
+        $lastItem = end($new_apel);
+        $last_apel_id = (int)$lastItem['id'];
     }
 
     // 3. Cek Absensi Harian baru
@@ -113,17 +105,18 @@ for ($cycle = 0; $cycle < $max_cycles; $cycle++) {
         WHERE h.id > ?
         ORDER BY h.id ASC
     ");
-    $stmt->execute([$last_harian_id]);
+    $stmt->execute(array($last_harian_id));
     $new_harian = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     if (!empty($new_harian)) {
-        $last_harian_id = (int)end($new_harian)['id'];
+        $lastItem = end($new_harian);
+        $last_harian_id = (int)$lastItem['id'];
     }
 
     // Jika ada data baru di salah satu tabel, kirimkan event 'new_absen'
     if (!empty($new_presensi) || !empty($new_apel) || !empty($new_harian)) {
         echo "event: new_absen\n";
-        echo "data: " . json_encode([
+        echo "data: " . json_encode(array(
             'status'           => 'success',
             'last_presensi_id' => $last_presensi_id,
             'last_apel_id'     => $last_apel_id,
@@ -132,7 +125,7 @@ for ($cycle = 0; $cycle < $max_cycles; $cycle++) {
             'new_apel'         => $new_apel,
             'new_harian'       => $new_harian,
             'timestamp'        => date('H:i:s')
-        ], JSON_UNESCAPED_UNICODE) . "\n\n";
+        )) . "\n\n";
         flush();
     } else {
         // Heartbeat comment ping agar koneksi tetap hidup
