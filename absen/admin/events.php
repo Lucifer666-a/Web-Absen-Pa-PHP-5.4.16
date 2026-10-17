@@ -5,6 +5,10 @@
 
 require_once 'auth_check.php';
 
+// PENTING: Lepaskan session lock segera setelah auth terverifikasi.
+// Jika tidak dilepas, loop SSE akan mengunci session dan membekukan seluruh browser/request lain!
+session_write_close();
+
 // Atur header untuk Server-Sent Events (SSE)
 header('Content-Type: text/event-stream');
 header('Cache-Control: no-cache');
@@ -53,9 +57,9 @@ echo "data: " . json_encode(array(
 )) . "\n\n";
 flush();
 
-// Loop SSE selama maks 15 iterasi (~45 detik per koneksi)
-// Browser EventSource akan otomatis reconnect saat koneksi berakhir
-$max_cycles = 15;
+// Di Apache/Nginx (multi-threaded), SSE bisa looping 15 siklus (~45 detik).
+// Di PHP built-in dev server (single-threaded), set 1 siklus agar tidak memblokir antrean request browser.
+$max_cycles = (php_sapi_name() === 'cli-server') ? 1 : 15;
 
 for ($cycle = 0; $cycle < $max_cycles; $cycle++) {
     if (connection_aborted()) {

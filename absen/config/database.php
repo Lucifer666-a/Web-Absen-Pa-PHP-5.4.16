@@ -3,6 +3,9 @@
 
 date_default_timezone_set('Asia/Jakarta');
 
+// Polyfill password_hash & password_verify untuk PHP 5.4
+require_once __DIR__ . '/password_compat.php';
+
 $host = '127.0.0.1';
 $db   = 'db_absen';
 $user = 'root';
@@ -10,11 +13,11 @@ $pass = ''; // Sesuaikan dengan password database local Anda
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
-$options = [
+$options = array(
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     PDO::ATTR_EMULATE_PREPARES   => false,
-];
+);
 
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
@@ -165,7 +168,7 @@ function logAdminActivity($pdo, $aksi, $detail = '') {
 
     try {
         $stmt = $pdo->prepare("INSERT INTO log_aktivitas (admin_id, admin_nama, aksi, detail) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$admin_id, $admin_nama, $aksi, $detail]);
+        $stmt->execute(array($admin_id, $admin_nama, $aksi, $detail));
     } catch (\PDOException $ex) {
         // Ignore if logging fails
     }

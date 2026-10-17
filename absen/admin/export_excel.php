@@ -1,42 +1,176 @@
 <?php
 // absen/admin/export_excel.php
-// Standalone Excel Exporter (HTML/MIME Spreadsheet)
-// 100% Kompatibel dengan PHP 5.4 s/d PHP 8+, tanpa membutuhkan vendor/composer!
-// Menghasilkan file Excel (.xls) lengkap dengan styling, Kop Surat (Base64 image), tanda tangan, dan tabel.
+require_once __DIR__ . '/auth_check.php';
 
-require_once 'auth_check.php';
+// Load library PHPExcel (kompatibel penuh dengan PHP 5.4.16)
+$phpExcelPath = __DIR__ . '/../../vendor/phpoffice/phpexcel/Classes/PHPExcel.php';
+if (!file_exists($phpExcelPath)) {
+    http_response_code(500);
+    die('Error: Library vendor PHPExcel belum terinstall di vendor/phpoffice/phpexcel.');
+}
+require_once $phpExcelPath;
 
 $type = isset($_GET['type']) ? $_GET['type'] : 'rapat';
+$tempFiles = array();
 
-// Helper load base64 kop surat
-function getKopSuratBase64() {
-    $kopCandidates = array(
-        __DIR__ . '/../assets/kop.png',
-        __DIR__ . '/../../kop.png',
-        dirname(__DIR__) . '/../kop.png',
-    );
-    foreach ($kopCandidates as $cand) {
-        if (file_exists($cand)) {
-            $data = file_get_contents($cand);
-            return 'data:image/png;base64,' . base64_encode($data);
+// Cleanup temporary image files on shutdown
+register_shutdown_function(function() use (&$tempFiles) {
+    foreach ($tempFiles as $f) {
+        if (file_exists($f)) {
+            @unlink($f);
         }
+    }
+});
+
+/**
+ * Decode Base64 data URI to temp PNG file
+ */
+function createTempImageFromBase64($base64Data, array &$tempFiles) {
+    if (empty($base64Data)) {
+        return null;
+    }
+    
+    $pos = strpos($base64Data, ',');
+    if ($pos !== false) {
+        $rawBase64 = substr($base64Data, $pos + 1);
+    } else {
+        $rawBase64 = $base64Data;
+    }
+    
+    $decoded = base64_decode($rawBase64, true);
+    if ($decoded === false || strlen($decoded) < 20) {
+        return null;
+    }
+    
+    $tmpFile = tempnam(sys_get_temp_dir(), 'sig_') . '.png';
+    if (file_put_contents($tmpFile, $decoded) !== false) {
+        $tempFiles[] = $tmpFile;
+        return $tmpFile;
     }
     return null;
 }
 
-// Format Indonesia
-$hariIndo = array('1'=>'SENIN', '2'=>'SELASA', '3'=>'RABU', '4'=>'KAMIS', '5'=>'JUM\'AT', '6'=>'SABTU', '7'=>'MINGGU');
-$bulanIndo = array(
-    '01'=>'JANUARI', '02'=>'FEBRUARI', '03'=>'MARET', '04'=>'APRIL',
-    '05'=>'MEI', '06'=>'JUNI', '07'=>'JULI', '08'=>'AGUSTUS',
-    '09'=>'SEPTEMBER', '10'=>'OKTOBER', '11'=>'NOVEMBER', '12'=>'DESEMBER'
+function addKopSuratToSheet($sheet, $maxCol = 'F') {
+    $kopCandidates = array(
+        __DIR__ . '/../assets/kop.png',
+        __DIR__ . '/../../kop.png',
+        dirname(dirname(__DIR__)) . '/kop.png',
+    );
+
+    $kopFile = null;
+    foreach ($kopCandidates as $candidate) {
+        if (file_exists($candidate)) {
+            $kopFile = $candidate;
+            break;
+        }
+    }
+
+    if ($kopFile) {
+        // Atur tinggi baris 1-4 untuk ruang KOP surat
+        $sheet->getRowDimension(1)->setRowHeight(32);
+        $sheet->getRowDimension(2)->setRowHeight(32);
+        $sheet->getRowDimension(3)->setRowHeight(30);
+        $sheet->getRowDimension(4)->setRowHeight(25);
+        $sheet->getRowDimension(5)->setRowHeight(12); // Spasi pemisah
+
+        $drawing = new PHPExcel_Worksheet_Drawing();
+        $drawing->setName('KopSurat');
+        $drawing->setDescription('Kop Surat Pengadilan Agama');
+        $drawing->setPath($kopFile);
+        $drawing->setCoordinates('A1');
+        $drawing->setHeight(115);
+        $drawing->setOffsetX(10);
+        $drawing->setOffsetY(4);
+        $drawing->setWorksheet($sheet);
+
+        return 6; // Baris awal konten berikutnya
+    }
+
+    return 1;
+}
+
+/**
+ * Tanda tangan mengetahui Ketua Pengadilan Agama di pojok kanan bawah
+ */
+function addTandaTanganKetua($sheet, $startRow, $col = 'D') {
+    $row = $startRow + 2; // Spasi pemisah
+
+    $sheet->setCellValue("{$col}{$row}", 'Mengetahui,');
+    $sheet->getStyle("{$col}{$row}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
+    $row++;
+
+    $sheet->setCellValue("{$col}{$row}", 'KETUA PENGADILAN AGAMA PALEMBANG KELAS IA');
+    $sheet->getStyle("{$col}{$row}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
+    $row += 4; // Beri ruang tanda tangan fisik ketua
+
+    $sheet->setCellValue("{$col}{$row}", 'MURSYID SYAH, S.Ag.');
+    $sheet->getStyle("{$col}{$row}")->getFont()->setName('Arial')->setSize(10)->setBold(true)->setUnderline(true);
+    $row++;
+
+    $sheet->setCellValue("{$col}{$row}", 'NIP. 197111251998031005');
+    $sheet->getStyle("{$col}{$row}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
+
+    return $row;
+}
+
+$objPHPExcel = new PHPExcel();
+$sheet = $objPHPExcel->getActiveSheet();
+$sheet->setShowGridLines(true);
+
+// Default font styling
+$objPHPExcel->getDefaultStyle()->getFont()->setName('Arial')->setSize(10);
+
+$headerStyle = array(
+    'font' => array(
+        'bold' => true,
+        'color' => array('rgb' => 'FFFFFF'),
+        'size' => 11,
+    ),
+    'fill' => array(
+        'type' => PHPExcel_Style_Fill::FILL_SOLID,
+        'startcolor' => array('rgb' => '1F2937'), // Dark slate
+    ),
+    'alignment' => array(
+        'horizontal' => PHPExcel_Style_Alignment::HORIZONTAL_CENTER,
+        'vertical'   => PHPExcel_Style_Alignment::VERTICAL_CENTER,
+        'wrap'       => true,
+    ),
+    'borders' => array(
+        'allborders' => array(
+            'style' => PHPExcel_Style_Border::BORDER_THIN,
+            'color' => array('rgb' => 'D1D5DB'),
+        ),
+    ),
 );
 
-$kopSrc = getKopSuratBase64();
+$titleStyle = array(
+    'font' => array(
+        'bold' => true,
+        'size' => 15,
+        'color' => array('rgb' => '111827'),
+    ),
+    'alignment' => array(
+        'horizontal' => PHPExcel_Style_Alignment::HORIZONTAL_LEFT,
+        'vertical'   => PHPExcel_Style_Alignment::VERTICAL_CENTER,
+    ),
+);
+
+$metaLabelStyle = array(
+    'font' => array('bold' => true, 'color' => array('rgb' => '4B5563'), 'size' => 10),
+);
+
+$dataBorder = array(
+    'borders' => array(
+        'allborders' => array(
+            'style' => PHPExcel_Style_Border::BORDER_THIN,
+            'color' => array('rgb' => 'E5E7EB'),
+        ),
+    ),
+);
 
 if ($type === 'rapat') {
     // =========================================================================
-    // EXPORT REKAP RAPAT / ACARA
+    // EXPORT REKAP PRESENSI RAPAT / ACARA
     // =========================================================================
     $acara_id = isset($_GET['acara_id']) ? (int)$_GET['acara_id'] : 0;
     $active_acara = null;
@@ -60,90 +194,105 @@ if ($type === 'rapat') {
         $data_presensi = $presensiStmt->fetchAll();
     }
 
-    $namaAcara   = isset($active_acara['nama_acara']) ? $active_acara['nama_acara'] : '-';
-    $pinAcara    = isset($active_acara['pin_acara']) ? $active_acara['pin_acara'] : '-';
+    $namaAcara = isset($active_acara['nama_acara']) ? $active_acara['nama_acara'] : '-';
+    $pinAcara  = isset($active_acara['pin_acara']) ? $active_acara['pin_acara'] : '-';
     $statusAcara = isset($active_acara['status']) ? $active_acara['status'] : '-';
 
-    $safeName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $namaAcara);
-    $filename = "Rekap_Presensi_Rapat_{$safeName}_" . date('Ymd_His') . ".xls";
+    $startKopRow = addKopSuratToSheet($sheet, 'E');
 
-    header("Content-Type: application/vnd.ms-excel; charset=UTF-8");
-    header("Content-Disposition: attachment; filename=\"{$filename}\"");
-    header("Pragma: no-cache");
-    header("Expires: 0");
+    // Judul & Metadata
+    $rowJudul = $startKopRow;
+    $sheet->setCellValue("A{$rowJudul}", 'REKAP PRESENSI RAPAT / ACARA');
+    $sheet->getStyle("A{$rowJudul}")->applyFromArray($titleStyle);
+    $sheet->getRowDimension($rowJudul)->setRowHeight(25);
 
-    echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
-    echo '<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">';
-    echo '<style>
-        body { font-family: Arial, sans-serif; font-size: 11pt; }
-        table { border-collapse: collapse; width: 100%; }
-        .kop-table td { border: none; padding: 2px; }
-        .data-table th, .data-table td { border: 1px solid #333333; padding: 6px 8px; }
-        .data-table th { background-color: #1F2937; color: #FFFFFF; font-weight: bold; text-align: center; }
-        .text-center { text-align: center; }
-        .text-left { text-align: left; }
-        .text-right { text-align: right; }
-        .title { font-size: 15pt; font-weight: bold; color: #111827; margin: 10px 0 5px 0; }
-        .meta { font-size: 10pt; color: #4B5563; font-weight: bold; }
-        .ttd { font-weight: bold; font-size: 10pt; }
-    </style></head><body>';
+    $rowMeta1 = $rowJudul + 1;
+    $rowMeta2 = $rowJudul + 2;
+    $rowMeta3 = $rowJudul + 3;
+    $sheet->setCellValue("A{$rowMeta1}", 'Nama Acara: ' . $namaAcara);
+    $sheet->setCellValue("A{$rowMeta2}", 'PIN Acara: ' . $pinAcara . '  |  Status: ' . $statusAcara);
+    $sheet->setCellValue("A{$rowMeta3}", 'Tanggal Cetak: ' . date('d/m/Y H:i:s'));
+    $sheet->getStyle("A{$rowMeta1}:A{$rowMeta3}")->applyFromArray($metaLabelStyle);
 
-    if ($kopSrc) {
-        echo '<table class="kop-table" style="margin-bottom: 15px;"><tr><td colspan="5" align="center"><img src="' . $kopSrc . '" height="115" alt="Kop Surat"></td></tr></table>';
+    // Header Kolom Tabel
+    $headers = array('No', 'Waktu Absen', 'Nama Pegawai', 'Jabatan', 'Tanda Tangan');
+    $cols = array('A', 'B', 'C', 'D', 'E');
+    $startRow = $rowMeta3 + 2;
+
+    foreach ($headers as $idx => $h) {
+        $cell = $cols[$idx] . $startRow;
+        $sheet->setCellValue($cell, $h);
     }
+    $sheet->getStyle("A{$startRow}:E{$startRow}")->applyFromArray($headerStyle);
+    $sheet->getRowDimension($startRow)->setRowHeight(28);
 
-    echo '<div class="title">REKAP PRESENSI RAPAT / ACARA</div>';
-    echo '<table class="kop-table" style="margin-bottom: 12px;">';
-    echo '<tr><td class="meta" colspan="5">Nama Acara : ' . htmlspecialchars($namaAcara, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-    echo '<tr><td class="meta" colspan="5">PIN Acara  : ' . htmlspecialchars($pinAcara, ENT_QUOTES, 'UTF-8') . '  |  Status : ' . htmlspecialchars($statusAcara, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-    echo '<tr><td class="meta" colspan="5">Tanggal Cetak : ' . date('d/m/Y H:i:s') . '</td></tr>';
-    echo '</table>';
-
-    echo '<table class="data-table">';
-    echo '<thead><tr>';
-    echo '<th style="width: 50px;">No</th>';
-    echo '<th style="width: 160px;">Waktu Absen</th>';
-    echo '<th style="width: 250px;">Nama Pegawai</th>';
-    echo '<th style="width: 200px;">Jabatan</th>';
-    echo '<th style="width: 140px;">Tanda Tangan</th>';
-    echo '</tr></thead><tbody>';
+    $currentRow = $startRow + 1;
+    $no = 1;
 
     if (!empty($data_presensi)) {
-        $no = 1;
         foreach ($data_presensi as $row) {
-            echo '<tr>';
-            echo '<td class="text-center">' . $no++ . '</td>';
-            echo '<td class="text-center">' . date('d/m/Y H:i:s', strtotime($row['waktu_absen'])) . '</td>';
-            echo '<td class="text-left">' . htmlspecialchars($row['nama'], ENT_QUOTES, 'UTF-8') . '</td>';
-            echo '<td class="text-left">' . htmlspecialchars($row['jabatan'], ENT_QUOTES, 'UTF-8') . '</td>';
-            echo '<td class="text-center">';
-            if (!empty($row['tanda_tangan'])) {
-                $sig = $row['tanda_tangan'];
-                if (strpos($sig, 'data:image') === 0) {
-                    echo '<img src="' . $sig . '" height="38" alt="TTD">';
-                } else {
-                    echo '<span style="color:#059669; font-weight:bold;">Terverifikasi</span>';
-                }
+            $sheet->setCellValue("A{$currentRow}", $no);
+            $sheet->setCellValue("B{$currentRow}", date('d/m/Y H:i:s', strtotime($row['waktu_absen'])));
+            $sheet->setCellValue("C{$currentRow}", $row['nama']);
+            $sheet->setCellValue("D{$currentRow}", $row['jabatan']);
+
+            // Alignments
+            $sheet->getStyle("A{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("B{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("C{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_LEFT)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("D{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_LEFT)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("E{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+
+            $sheet->getStyle("A{$currentRow}:E{$currentRow}")->applyFromArray($dataBorder);
+
+            // Tanda Tangan Image Embed
+            $sigPath = createTempImageFromBase64(isset($row['tanda_tangan']) ? $row['tanda_tangan'] : null, $tempFiles);
+            if ($sigPath && file_exists($sigPath)) {
+                $sheet->setCellValue("E{$currentRow}", '');
+                $sheet->getRowDimension($currentRow)->setRowHeight(45);
+                $drawing = new PHPExcel_Worksheet_Drawing();
+                $drawing->setName('TTD_' . $no);
+                $drawing->setDescription('Tanda Tangan ' . $row['nama']);
+                $drawing->setPath($sigPath);
+                $drawing->setCoordinates("E{$currentRow}");
+                $drawing->setHeight(50);
+                $drawing->setOffsetX(15);
+                $drawing->setOffsetY(4);
+                $drawing->setWorksheet($sheet);
             } else {
-                echo '-';
+                $sheet->setCellValue("E{$currentRow}", '-');
+                $sheet->getRowDimension($currentRow)->setRowHeight(24);
             }
-            echo '</td>';
-            echo '</tr>';
+
+            $currentRow++;
+            $no++;
         }
     } else {
-        echo '<tr><td colspan="5" class="text-center" style="padding: 15px;">Belum ada data presensi untuk acara ini.</td></tr>';
+        $sheet->setCellValue("A{$currentRow}", 'Belum ada data kehadiran pada acara ini');
+        $sheet->mergeCells("A{$currentRow}:E{$currentRow}");
+        $sheet->getStyle("A{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+        $sheet->getStyle("A{$currentRow}:E{$currentRow}")->applyFromArray($dataBorder);
+        $sheet->getRowDimension($currentRow)->setRowHeight(30);
+        $currentRow++;
     }
-    echo '</tbody></table>';
 
-    // TTD Ketua
-    echo '<br><br>';
-    echo '<table class="kop-table">';
-    echo '<tr><td colspan="3"></td><td colspan="2" class="text-center ttd">Mengetahui,<br>KETUA PENGADILAN AGAMA PALEMBANG KELAS IA<br><br><br><br><u>MURSYID SYAH, S.Ag.</u><br>NIP. 197111251998031005</td></tr>';
-    echo '</table>';
+    // Tanda Tangan Mengetahui Ketua Pengadilan Agama
+    $currentRow = addTandaTanganKetua($sheet, $currentRow, 'D');
 
-    echo '<div style="font-size: 9pt; font-style: italic; color: #6B7280; margin-top: 20px;">* Catatan: Data presensi ini sah dan dicatat secara digital melalui sistem absensi digital Pengadilan Agama.</div>';
-    echo '</body></html>';
-    exit;
+    // Catatan Kaki
+    $currentRow += 2;
+    $sheet->setCellValue("A{$currentRow}", '* Catatan: Data presensi ini sah dan berasal dari konfirmasi presensi pegawai via aplikasi Android / Web.');
+    $sheet->getStyle("A{$currentRow}")->getFont()->setItalic(true)->setSize(9)->getColor()->setRGB('6B7280');
+
+    // Lebar Kolom
+    $sheet->getColumnDimension('A')->setWidth(8);
+    $sheet->getColumnDimension('B')->setWidth(22);
+    $sheet->getColumnDimension('C')->setWidth(30);
+    $sheet->getColumnDimension('D')->setWidth(26);
+    $sheet->getColumnDimension('E')->setWidth(22);
+
+    $safeName = preg_replace('/[^A-Za-z0-9_\-]/', '_', $namaAcara);
+    $filename = "Rekap_Presensi_Rapat_{$safeName}_" . date('Ymd_His') . ".xlsx";
 
 } elseif ($type === 'apel') {
     // =========================================================================
@@ -172,8 +321,7 @@ if ($type === 'rapat') {
     if ($apel_user_id > 0) {
         $stmtU = $pdo->prepare("SELECT nama FROM users WHERE id = ?");
         $stmtU->execute(array($apel_user_id));
-        $uNama = $stmtU->fetchColumn();
-        $uNama = $uNama ? $uNama : '';
+        $uNama = $stmtU->fetchColumn() ? $stmtU->fetchColumn() : '';
         $sqlApel .= " AND (user_id = ? OR nama = ?)";
         $paramsApel[] = $apel_user_id;
         $paramsApel[] = $uNama;
@@ -184,6 +332,7 @@ if ($type === 'rapat') {
     $stmtApel->execute($paramsApel);
     $data_presensi_apel = $stmtApel->fetchAll();
 
+    // Tentukan Judul Sesi Apel
     if ($sesi_filter === 'pagi') {
         $judulApel = 'DAFTAR HADIR APEL PAGI';
     } elseif ($sesi_filter === 'sore') {
@@ -192,113 +341,165 @@ if ($type === 'rapat') {
         $judulApel = 'DAFTAR HADIR APEL PAGI / SORE';
     }
 
+    // Format Hari, Tanggal Indonesia
+    $hariIndo = array('1'=>'SENIN', '2'=>'SELASA', '3'=>'RABU', '4'=>'KAMIS', '5'=>'JUM\'AT', '6'=>'SABTU', '7'=>'MINGGU');
+    $bulanIndo = array(
+        '01'=>'JANUARI', '02'=>'FEBRUARI', '03'=>'MARET', '04'=>'APRIL',
+        '05'=>'MEI', '06'=>'JUNI', '07'=>'JULI', '08'=>'AGUSTUS',
+        '09'=>'SEPTEMBER', '10'=>'OKTOBER', '11'=>'NOVEMBER', '12'=>'DESEMBER'
+    );
+
     if (!empty($tgl_mulai) && !empty($tgl_selesai) && $tgl_mulai === $tgl_selesai) {
         $ts = strtotime($tgl_mulai);
         $wHari = isset($hariIndo[date('N', $ts)]) ? $hariIndo[date('N', $ts)] : '';
         $d = date('j', $ts);
         $m = isset($bulanIndo[date('m', $ts)]) ? $bulanIndo[date('m', $ts)] : '';
         $y = date('Y', $ts);
-        $hariTanggalText = ": &nbsp; {$wHari}, &nbsp;{$d} {$m} {$y}";
+        $hariTanggalText = ":   {$wHari},  {$d} {$m} {$y}";
     } elseif (!empty($tgl_mulai) || !empty($tgl_selesai)) {
-        $hariTanggalText = ": &nbsp; " . ($tgl_mulai ? $tgl_mulai : 'Awal') . " s/d " . ($tgl_selesai ? $tgl_selesai : 'Sekarang');
+        $hariTanggalText = ":   " . ($tgl_mulai ? $tgl_mulai : 'Awal') . " s/d " . ($tgl_selesai ? $tgl_selesai : 'Sekarang');
     } elseif (!empty($data_presensi_apel)) {
         $ts = strtotime($data_presensi_apel[0]['tanggal']);
         $wHari = isset($hariIndo[date('N', $ts)]) ? $hariIndo[date('N', $ts)] : '';
         $d = date('j', $ts);
         $m = isset($bulanIndo[date('m', $ts)]) ? $bulanIndo[date('m', $ts)] : '';
         $y = date('Y', $ts);
-        $hariTanggalText = ": &nbsp; {$wHari}, &nbsp;{$d} {$m} {$y}";
+        $hariTanggalText = ":   {$wHari},  {$d} {$m} {$y}";
     } else {
         $ts = time();
         $wHari = isset($hariIndo[date('N', $ts)]) ? $hariIndo[date('N', $ts)] : '';
         $d = date('j', $ts);
         $m = isset($bulanIndo[date('m', $ts)]) ? $bulanIndo[date('m', $ts)] : '';
         $y = date('Y', $ts);
-        $hariTanggalText = ": &nbsp; {$wHari}, &nbsp;{$d} {$m} {$y}";
+        $hariTanggalText = ":   {$wHari},  {$d} {$m} {$y}";
     }
 
-    $filename = "DAFTAR_HADIR_APEL_" . strtoupper($sesi_filter) . "_" . date('Ymd_His') . ".xls";
+    $startKopRow = addKopSuratToSheet($sheet, 'F');
 
-    header("Content-Type: application/vnd.ms-excel; charset=UTF-8");
-    header("Content-Disposition: attachment; filename=\"{$filename}\"");
-    header("Pragma: no-cache");
-    header("Expires: 0");
+    // Header Format persis ABSEN apel.xlsx
+    $rowJudul = $startKopRow + 1;
+    $sheet->mergeCells("A{$rowJudul}:F{$rowJudul}");
+    $sheet->setCellValue("A{$rowJudul}", $judulApel);
+    $sheet->getStyle("A{$rowJudul}")->getFont()->setName('Arial')->setSize(14)->setBold(true);
+    $sheet->getStyle("A{$rowJudul}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+    $sheet->getRowDimension($rowJudul)->setRowHeight(26);
 
-    echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
-    echo '<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">';
-    echo '<style>
-        body { font-family: Arial, sans-serif; font-size: 10pt; }
-        table { border-collapse: collapse; width: 100%; }
-        .kop-table td { border: none; padding: 2px; }
-        .data-table th, .data-table td { border: 1px solid #000000; padding: 5px 6px; }
-        .data-table th { background-color: #F3F4F6; color: #000000; font-weight: bold; text-align: center; }
-        .text-center { text-align: center; }
-        .text-left { text-align: left; }
-        .title { font-size: 14pt; font-weight: bold; text-align: center; margin: 15px 0 10px 0; }
-        .meta-label { font-weight: bold; font-size: 10pt; }
-        .ttd { font-weight: bold; font-size: 10pt; }
-    </style></head><body>';
+    // Baris HARI, TANGGAL
+    $rowHari = $rowJudul + 2;
+    $sheet->setCellValue("A{$rowHari}", 'HARI, TANGGAL');
+    $sheet->getStyle("A{$rowHari}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
+    $sheet->getStyle("A{$rowHari}")->getAlignment()->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
 
-    if ($kopSrc) {
-        echo '<table class="kop-table" style="margin-bottom: 10px;"><tr><td colspan="5" align="center"><img src="' . $kopSrc . '" height="115" alt="Kop Surat"></td></tr></table>';
-    }
+    $sheet->mergeCells("C{$rowHari}:F{$rowHari}");
+    $sheet->setCellValue("C{$rowHari}", $hariTanggalText);
+    $sheet->getStyle("C{$rowHari}")->getFont()->setName('Arial')->setSize(10)->setBold(true);
+    $sheet->getStyle("C{$rowHari}")->getAlignment()->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+    $sheet->getRowDimension($rowHari)->setRowHeight(20);
 
-    echo '<div class="title">' . $judulApel . '</div>';
-    echo '<table class="kop-table" style="margin-bottom: 10px;">';
-    echo '<tr><td style="width: 140px;" class="meta-label">HARI, TANGGAL</td><td colspan="4" class="meta-label">' . $hariTanggalText . '</td></tr>';
-    echo '</table>';
+    // Table Headers persis ABSEN apel.xlsx
+    $startRow = $rowHari + 1;
+    $sheet->setCellValue("A{$startRow}", 'NO');
+    $sheet->mergeCells("B{$startRow}:C{$startRow}");
+    $sheet->setCellValue("B{$startRow}", 'NAMA');
+    $sheet->setCellValue("D{$startRow}", 'JABATAN');
+    $sheet->mergeCells("E{$startRow}:F{$startRow}");
+    $sheet->setCellValue("E{$startRow}", 'TANDA TANGAN');
 
-    echo '<table class="data-table">';
-    echo '<thead><tr>';
-    echo '<th style="width: 45px;">NO</th>';
-    echo '<th style="width: 250px;">NAMA</th>';
-    echo '<th style="width: 200px;">JABATAN</th>';
-    echo '<th colspan="2" style="width: 180px;">TANDA TANGAN</th>';
-    echo '</tr></thead><tbody>';
+    $tableHeaderStyle = array(
+        'font' => array(
+            'name' => 'Arial',
+            'bold' => true,
+            'size' => 10,
+            'color' => array('rgb' => '000000'),
+        ),
+        'alignment' => array(
+            'horizontal' => PHPExcel_Style_Alignment::HORIZONTAL_CENTER,
+            'vertical'   => PHPExcel_Style_Alignment::VERTICAL_CENTER,
+        ),
+        'borders' => array(
+            'allborders' => array(
+                'style' => PHPExcel_Style_Border::BORDER_THIN,
+                'color' => array('rgb' => '000000'),
+            ),
+        ),
+    );
+
+    $sheet->getStyle("A{$startRow}:F{$startRow}")->applyFromArray($tableHeaderStyle);
+    $sheet->getRowDimension($startRow)->setRowHeight(26);
+
+    $thinBorderAll = array(
+        'borders' => array(
+            'allborders' => array(
+                'style' => PHPExcel_Style_Border::BORDER_THIN,
+                'color' => array('rgb' => '000000'),
+            ),
+        ),
+    );
+
+    $currentRow = $startRow + 1;
+    $no = 1;
 
     if (!empty($data_presensi_apel)) {
-        $no = 1;
         foreach ($data_presensi_apel as $row) {
-            $isOdd = ($no % 2 !== 0);
-            echo '<tr>';
-            echo '<td class="text-center">' . $no . '.</td>';
-            echo '<td class="text-left">' . htmlspecialchars($row['nama'], ENT_QUOTES, 'UTF-8') . '</td>';
-            echo '<td class="text-left">' . htmlspecialchars($row['jabatan'], ENT_QUOTES, 'UTF-8') . '</td>';
+            $sheet->mergeCells("B{$currentRow}:C{$currentRow}");
+            $sheet->mergeCells("E{$currentRow}:F{$currentRow}");
 
-            if (!empty($row['tanda_tangan']) && strpos($row['tanda_tangan'], 'data:image') === 0) {
-                if ($isOdd) {
-                    echo '<td class="text-center" style="width: 90px;"><img src="' . $row['tanda_tangan'] . '" height="36" alt="TTD"></td>';
-                    echo '<td class="text-center" style="width: 90px;"></td>';
-                } else {
-                    echo '<td class="text-center" style="width: 90px;"></td>';
-                    echo '<td class="text-center" style="width: 90px;"><img src="' . $row['tanda_tangan'] . '" height="36" alt="TTD"></td>';
-                }
+            $sheet->setCellValue("A{$currentRow}", $no);
+            $sheet->setCellValue("B{$currentRow}", $row['nama']);
+            $sheet->setCellValue("D{$currentRow}", $row['jabatan']);
+
+            // Alignments
+            $sheet->getStyle("A{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("B{$currentRow}:C{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_LEFT)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("D{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_LEFT)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("E{$currentRow}:F{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+
+            $sheet->getStyle("A{$currentRow}:F{$currentRow}")->applyFromArray($thinBorderAll);
+            $sheet->getStyle("A{$currentRow}:F{$currentRow}")->getFont()->setName('Arial')->setSize(9.5);
+
+            // Tanda Tangan Image Embed
+            $sigPath = createTempImageFromBase64(isset($row['tanda_tangan']) ? $row['tanda_tangan'] : null, $tempFiles);
+            if ($sigPath && file_exists($sigPath)) {
+                $sheet->setCellValue("E{$currentRow}", '');
+                $sheet->getRowDimension($currentRow)->setRowHeight(44);
+                $drawing = new PHPExcel_Worksheet_Drawing();
+                $drawing->setName('TTD_Apel_' . $no);
+                $drawing->setDescription('Tanda Tangan ' . $row['nama']);
+                $drawing->setPath($sigPath);
+                $drawing->setCoordinates("E{$currentRow}");
+                $drawing->setHeight(48);
+                $drawing->setOffsetX(35);
+                $drawing->setOffsetY(2);
+                $drawing->setWorksheet($sheet);
             } else {
-                if ($isOdd) {
-                    echo '<td class="text-left" style="width: 90px;">' . $no . '. ..........</td>';
-                    echo '<td style="width: 90px;"></td>';
-                } else {
-                    echo '<td style="width: 90px;"></td>';
-                    echo '<td class="text-left" style="width: 90px;">' . $no . '. ..........</td>';
-                }
+                $sheet->setCellValue("E{$currentRow}", '');
+                $sheet->getRowDimension($currentRow)->setRowHeight(24);
             }
-            echo '</tr>';
+
+            $currentRow++;
             $no++;
         }
     } else {
-        echo '<tr><td colspan="5" class="text-center" style="padding: 15px;">Belum ada data presensi apel sesuai filter.</td></tr>';
+        $sheet->mergeCells("A{$currentRow}:F{$currentRow}");
+        $sheet->setCellValue("A{$currentRow}", 'Belum ada data presensi apel sesuai filter.');
+        $sheet->getStyle("A{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+        $sheet->getStyle("A{$currentRow}:F{$currentRow}")->applyFromArray($thinBorderAll);
+        $sheet->getRowDimension($currentRow)->setRowHeight(30);
+        $currentRow++;
     }
-    echo '</tbody></table>';
 
-    // TTD Ketua
-    echo '<br><br>';
-    echo '<table class="kop-table">';
-    echo '<tr><td colspan="3"></td><td colspan="2" class="text-center ttd">Mengetahui,<br>KETUA PENGADILAN AGAMA PALEMBANG KELAS IA<br><br><br><br><u>MURSYID SYAH, S.Ag.</u><br>NIP. 197111251998031005</td></tr>';
-    echo '</table>';
+    // Bagian Mengetahui / Footer persis template ABSEN apel.xlsx
+    $currentRow = addTandaTanganKetua($sheet, $currentRow, 'D');
 
-    echo '<div style="font-size: 9pt; font-style: italic; color: #6B7280; margin-top: 20px;">* Catatan: Data presensi apel ini sah dan dicatat secara digital melalui sistem absensi digital Pengadilan Agama.</div>';
-    echo '</body></html>';
-    exit;
+    // Set Lebar Kolom yang proporsional mengikuti ABSEN apel.xlsx
+    $sheet->getColumnDimension('A')->setWidth(6);
+    $sheet->getColumnDimension('B')->setWidth(20);
+    $sheet->getColumnDimension('C')->setWidth(20);
+    $sheet->getColumnDimension('D')->setWidth(34);
+    $sheet->getColumnDimension('E')->setWidth(14);
+    $sheet->getColumnDimension('F')->setWidth(14);
+
+    $filename = "DAFTAR_HADIR_APEL_" . strtoupper($sesi_filter) . "_" . date('Ymd_His') . ".xlsx";
 
 } elseif ($type === 'harian') {
     // =========================================================================
@@ -329,90 +530,124 @@ if ($type === 'rapat') {
     $stmtHarian->execute($paramsHarian);
     $data_presensi_harian = $stmtHarian->fetchAll();
 
+    $startKopRow = addKopSuratToSheet($sheet, 'H');
+
+    // Judul & Metadata
+    $rowJudul = $startKopRow;
+    $sheet->setCellValue("A{$rowJudul}", 'REKAP ABSENSI HARIAN');
+    $sheet->getStyle("A{$rowJudul}")->applyFromArray($titleStyle);
+    $sheet->getRowDimension($rowJudul)->setRowHeight(25);
+
+    $rowMeta1 = $rowJudul + 1;
+    $rowMeta2 = $rowJudul + 2;
+    $rowMeta3 = $rowJudul + 3;
     $periodeLabel = ($harian_tgl_mulai ? $harian_tgl_mulai : 'Semua') . ' s/d ' . ($harian_tgl_selesai ? $harian_tgl_selesai : 'Semua');
-    $filename = "Rekap_Absensi_Harian_" . date('Ymd_His') . ".xls";
+    $sheet->setCellValue("A{$rowMeta1}", 'Periode: ' . $periodeLabel);
+    $sheet->setCellValue("A{$rowMeta2}", 'Total Riwayat: ' . count($data_presensi_harian) . ' catatan');
+    $sheet->setCellValue("A{$rowMeta3}", 'Tanggal Cetak: ' . date('d/m/Y H:i:s'));
+    $sheet->getStyle("A{$rowMeta1}:A{$rowMeta3}")->applyFromArray($metaLabelStyle);
 
-    header("Content-Type: application/vnd.ms-excel; charset=UTF-8");
-    header("Content-Disposition: attachment; filename=\"{$filename}\"");
-    header("Pragma: no-cache");
-    header("Expires: 0");
+    $headers = array('No', 'Tanggal', 'NIP', 'Nama Pegawai', 'Jabatan', 'Jam Masuk (Check-in)', 'Jam Pulang (Check-out)', 'Foto');
+    $cols = array('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H');
+    $startRow = $rowMeta3 + 2;
 
-    echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
-    echo '<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">';
-    echo '<style>
-        body { font-family: Arial, sans-serif; font-size: 10pt; }
-        table { border-collapse: collapse; width: 100%; }
-        .kop-table td { border: none; padding: 2px; }
-        .data-table th, .data-table td { border: 1px solid #333333; padding: 6px 8px; }
-        .data-table th { background-color: #1F2937; color: #FFFFFF; font-weight: bold; text-align: center; }
-        .text-center { text-align: center; }
-        .text-left { text-align: left; }
-        .title { font-size: 15pt; font-weight: bold; margin: 10px 0 5px 0; }
-        .meta { font-size: 10pt; color: #4B5563; font-weight: bold; }
-        .ttd { font-weight: bold; font-size: 10pt; }
-    </style></head><body>';
-
-    if ($kopSrc) {
-        echo '<table class="kop-table" style="margin-bottom: 12px;"><tr><td colspan="8" align="center"><img src="' . $kopSrc . '" height="115" alt="Kop Surat"></td></tr></table>';
+    foreach ($headers as $idx => $h) {
+        $cell = $cols[$idx] . $startRow;
+        $sheet->setCellValue($cell, $h);
     }
+    $sheet->getStyle("A{$startRow}:H{$startRow}")->applyFromArray($headerStyle);
+    $sheet->getRowDimension($startRow)->setRowHeight(28);
 
-    echo '<div class="title">REKAP ABSENSI HARIAN</div>';
-    echo '<table class="kop-table" style="margin-bottom: 12px;">';
-    echo '<tr><td class="meta" colspan="8">Periode : ' . htmlspecialchars($periodeLabel, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-    echo '<tr><td class="meta" colspan="8">Total Riwayat : ' . count($data_presensi_harian) . ' catatan</td></tr>';
-    echo '<tr><td class="meta" colspan="8">Tanggal Cetak : ' . date('d/m/Y H:i:s') . '</td></tr>';
-    echo '</table>';
-
-    echo '<table class="data-table">';
-    echo '<thead><tr>';
-    echo '<th style="width: 45px;">No</th>';
-    echo '<th style="width: 100px;">Tanggal</th>';
-    echo '<th style="width: 130px;">NIP</th>';
-    echo '<th style="width: 220px;">Nama Pegawai</th>';
-    echo '<th style="width: 180px;">Jabatan</th>';
-    echo '<th style="width: 120px;">Jam Masuk (Check-in)</th>';
-    echo '<th style="width: 120px;">Jam Pulang (Check-out)</th>';
-    echo '<th style="width: 90px;">Foto</th>';
-    echo '</tr></thead><tbody>';
+    $currentRow = $startRow + 1;
+    $no = 1;
 
     if (!empty($data_presensi_harian)) {
-        $no = 1;
         foreach ($data_presensi_harian as $row) {
-            echo '<tr>';
-            echo '<td class="text-center">' . $no++ . '</td>';
-            echo '<td class="text-center">' . date('d/m/Y', strtotime($row['tanggal'])) . '</td>';
-            echo '<td class="text-center">' . htmlspecialchars($row['nip'] ? $row['nip'] : '-', ENT_QUOTES, 'UTF-8') . '</td>';
-            echo '<td class="text-left">' . htmlspecialchars($row['nama'], ENT_QUOTES, 'UTF-8') . '</td>';
-            echo '<td class="text-left">' . htmlspecialchars($row['jabatan'], ENT_QUOTES, 'UTF-8') . '</td>';
-            echo '<td class="text-center">' . htmlspecialchars($row['waktu_checkin'] ? $row['waktu_checkin'] : '-', ENT_QUOTES, 'UTF-8') . '</td>';
-            echo '<td class="text-center">' . htmlspecialchars($row['waktu_checkout'] ? $row['waktu_checkout'] : '-', ENT_QUOTES, 'UTF-8') . '</td>';
-            echo '<td class="text-center">';
+            $sheet->setCellValue("A{$currentRow}", $no);
+            $sheet->setCellValue("B{$currentRow}", date('d/m/Y', strtotime($row['tanggal'])));
+            $sheet->setCellValue("C{$currentRow}", $row['nip'] ? $row['nip'] : '-');
+            $sheet->setCellValue("D{$currentRow}", $row['nama']);
+            $sheet->setCellValue("E{$currentRow}", $row['jabatan']);
+            $sheet->setCellValue("F{$currentRow}", $row['waktu_checkin'] ? $row['waktu_checkin'] : '-');
+            $sheet->setCellValue("G{$currentRow}", $row['waktu_checkout'] ? $row['waktu_checkout'] : '-');
+
+            $sheet->getStyle("A{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("B{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("C{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("D{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_LEFT)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("E{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_LEFT)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("F{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("G{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+            $sheet->getStyle("H{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+
+            $sheet->getStyle("A{$currentRow}:H{$currentRow}")->applyFromArray($dataBorder);
+
+            // Embed Foto Absen jika file foto ada
             $fotoPath = !empty($row['foto_path']) ? __DIR__ . '/../' . ltrim($row['foto_path'], '/\\') : null;
             if ($fotoPath && file_exists($fotoPath)) {
-                $fotoData = base64_encode(file_get_contents($fotoPath));
-                echo '<img src="data:image/jpeg;base64,' . $fotoData . '" height="45" alt="Foto">';
+                $sheet->getRowDimension($currentRow)->setRowHeight(45);
+                $drawing = new PHPExcel_Worksheet_Drawing();
+                $drawing->setName('Foto_' . $no);
+                $drawing->setDescription('Foto Absen ' . $row['nama']);
+                $drawing->setPath($fotoPath);
+                $drawing->setCoordinates("H{$currentRow}");
+                $drawing->setHeight(48);
+                $drawing->setOffsetX(15);
+                $drawing->setOffsetY(4);
+                $drawing->setWorksheet($sheet);
             } else {
-                echo '-';
+                $sheet->setCellValue("H{$currentRow}", '-');
+                $sheet->getRowDimension($currentRow)->setRowHeight(24);
             }
-            echo '</td>';
-            echo '</tr>';
+
+            $currentRow++;
+            $no++;
         }
     } else {
-        echo '<tr><td colspan="8" class="text-center" style="padding: 15px;">Belum ada data absensi harian sesuai filter.</td></tr>';
+        $sheet->setCellValue("A{$currentRow}", 'Belum ada data absensi harian sesuai filter.');
+        $sheet->mergeCells("A{$currentRow}:H{$currentRow}");
+        $sheet->getStyle("A{$currentRow}")->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER)->setVertical(PHPExcel_Style_Alignment::VERTICAL_CENTER);
+        $sheet->getStyle("A{$currentRow}:H{$currentRow}")->applyFromArray($dataBorder);
+        $sheet->getRowDimension($currentRow)->setRowHeight(30);
+        $currentRow++;
     }
-    echo '</tbody></table>';
 
-    // TTD Ketua
-    echo '<br><br>';
-    echo '<table class="kop-table">';
-    echo '<tr><td colspan="5"></td><td colspan="3" class="text-center ttd">Mengetahui,<br>KETUA PENGADILAN AGAMA PALEMBANG KELAS IA<br><br><br><br><u>MURSYID SYAH, S.Ag.</u><br>NIP. 197111251998031005</td></tr>';
-    echo '</table>';
+    // Tanda Tangan Mengetahui Ketua Pengadilan Agama (Kolom F agar pas di sisi kanan tabel A-H)
+    $currentRow = addTandaTanganKetua($sheet, $currentRow, 'F');
 
-    echo '<div style="font-size: 9pt; font-style: italic; color: #6B7280; margin-top: 20px;">* Catatan: Data absensi harian ini sah dan berasal dari konfirmasi presensi pegawai via aplikasi Android / Web.</div>';
-    echo '</body></html>';
-    exit;
+    // Catatan Kaki
+    $currentRow += 2;
+    $sheet->setCellValue("A{$currentRow}", '* Catatan: Data absensi harian ini sah dan berasal dari konfirmasi presensi pegawai via aplikasi Android / Web.');
+    $sheet->getStyle("A{$currentRow}")->getFont()->setItalic(true)->setSize(9)->getColor()->setRGB('6B7280');
 
+    // Column widths
+    $sheet->getColumnDimension('A')->setWidth(8);
+    $sheet->getColumnDimension('B')->setWidth(15);
+    $sheet->getColumnDimension('C')->setWidth(18);
+    $sheet->getColumnDimension('D')->setWidth(28);
+    $sheet->getColumnDimension('E')->setWidth(24);
+    $sheet->getColumnDimension('F')->setWidth(20);
+    $sheet->getColumnDimension('G')->setWidth(20);
+    $sheet->getColumnDimension('H')->setWidth(18);
+
+    $filename = "Rekap_Absensi_Harian_" . date('Ymd_His') . ".xlsx";
 } else {
     http_response_code(400);
     die('Tipe export tidak valid.');
 }
+
+// =========================================================================
+// OUTPUT FILE EXCEL KE BROWSER
+// =========================================================================
+header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+header('Content-Disposition: attachment; filename="' . $filename . '"');
+header('Cache-Control: max-age=0');
+header('Cache-Control: max-age=1'); // IE9
+header('Expires: Mon, 26 Jul 1997 05:00:00 GMT'); // Past date
+header('Last-Modified: ' . gmdate('D, d M Y H:i:s') . ' GMT');
+header('Cache-Control: cache, must-revalidate');
+header('Pragma: public');
+
+$writer = PHPExcel_IOFactory::createWriter($objPHPExcel, 'Excel2007');
+$writer->save('php://output');
+exit;

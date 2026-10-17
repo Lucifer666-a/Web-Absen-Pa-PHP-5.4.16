@@ -1,5 +1,10 @@
 {
     "require": {
         "phpoffice/phpexcel": "1.8.*"
+    },
+    "config": {
+        "audit": {
+            "block-insecure": false
+        }
     }
 }

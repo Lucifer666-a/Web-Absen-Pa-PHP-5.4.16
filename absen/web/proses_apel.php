@@ -42,7 +42,7 @@ function redirectWithError($msg, $oldData = array()) {
 if ($sesi === '' || $tanda_tangan === '') {
     redirectWithError("Pilih sesi apel dan pastikan tanda tangan sudah dibubuhkan.", $_POST);
 }
-if (!in_array($sesi, ['pagi', 'sore'], true)) {
+if (!in_array($sesi, array('pagi', 'sore'), true)) {
     redirectWithError("Sesi apel tidak valid.", $_POST);
 }
 if (strpos($tanda_tangan, 'data:image/') !== 0) {
