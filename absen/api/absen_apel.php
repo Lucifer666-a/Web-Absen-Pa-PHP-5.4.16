@@ -135,8 +135,8 @@ if (!in_array($sesi, array('pagi', 'sore'), true)) {
 }
 
 // Validasi Hari dan Jam Apel
-// Apel Pagi: Hanya hari Senin (1), Jam 07:00 - 08:30
-// Apel Sore: Hanya hari Jumat (5), Jam 16:00 - 17:30
+// Apel Pagi: Hanya hari Senin (1), Jam 07:30 - 09:00
+// Apel Sore: Hanya hari Jumat (5), Jam 16:25 - 18:00
 $dayOfWeek = (int)date('N', strtotime($tanggal)); // 1 (Senin) s/d 7 (Minggu)
 
 if ($sesi === 'pagi') {
@@ -148,11 +148,11 @@ if ($sesi === 'pagi') {
         ));
         exit;
     }
-    if ($waktu < '07:00:00' || $waktu > '08:30:00') {
+    if ($waktu < '07:30:00' || $waktu > '09:00:00') {
         http_response_code(400);
         echo json_encode(array(
             'status'  => 'error',
-            'message' => 'Absen Apel Pagi hanya dibuka pukul 07:00 - 08:30 WIB.'
+            'message' => 'Absen Apel Pagi hanya dibuka pukul 07:30 - 09:00 WIB.'
         ));
         exit;
     }
@@ -165,11 +165,11 @@ if ($sesi === 'pagi') {
         ));
         exit;
     }
-    if ($waktu < '16:00:00' || $waktu > '17:30:00') {
+    if ($waktu < '16:25:00' || $waktu > '18:00:00') {
         http_response_code(400);
         echo json_encode(array(
             'status'  => 'error',
-            'message' => 'Absen Apel Sore hanya dibuka pukul 16:00 - 17:30 WIB.'
+            'message' => 'Absen Apel Sore hanya dibuka pukul 16:25 - 18:00 WIB.'
         ));
         exit;
     }

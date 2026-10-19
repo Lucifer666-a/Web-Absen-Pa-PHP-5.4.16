@@ -258,23 +258,23 @@ function handleFotoUpload($userId, $tanggal) {
 // METHOD POST (atau GET dengan param aksi): Prosedur Check-in / Check-out
 if ($aksi === 'checkin') {
     // Validasi: belum dibuka
-    if ($currentTime < '07:00:00') {
+    if ($currentTime < '07:30:00') {
         http_response_code(403);
         echo json_encode(array(
             'success' => false,
             'status'  => 'error',
-            'message' => 'Absensi check-in belum dibuka. Mulai jam 07:00.'
+            'message' => 'Absensi check-in belum dibuka. Mulai jam 07:30.'
         ));
         exit;
     }
 
     // Validasi: sudah ditutup (otomatis ditolak, tidak ada status terlambat)
-    if ($currentTime > '08:10:00') {
+    if ($currentTime > '09:00:00') {
         http_response_code(403);
         echo json_encode(array(
             'success' => false,
             'status'  => 'error',
-            'message' => 'Waktu check-in sudah ditutup (batas jam 08:10).'
+            'message' => 'Waktu check-in sudah ditutup (batas jam 09:00).'
         ));
         exit;
     }
@@ -331,24 +331,24 @@ if ($aksi === 'checkin') {
 }
 
 if ($aksi === 'checkout') {
-    // Validation: Jam < 16:00
-    if ($currentTime < '16:00:00') {
+    // Validation: Jam < 16:25
+    if ($currentTime < '16:25:00') {
         http_response_code(403);
         echo json_encode(array(
             'success' => false,
             'status'  => 'error',
-            'message' => 'Check-out belum tersedia. Mulai jam 16:00.'
+            'message' => 'Check-out belum tersedia. Mulai jam 16:25.'
         ));
         exit;
     }
 
-    // Validation: Jam > 17:00
-    if ($currentTime > '17:30:00') {
+    // Validation: Jam > 18:00
+    if ($currentTime > '18:00:00') {
         http_response_code(403);
         echo json_encode(array(
             'success' => false,
             'status'  => 'error',
-            'message' => 'Waktu check-out sudah lewat (tutup jam 17:30).'
+            'message' => 'Waktu check-out sudah lewat (tutup jam 18:00).'
         ));
         exit;
     }
