@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS `absensi_harian` (
   `status_checkin`  ENUM('tepat_waktu', 'terlambat') NULL,
   `foto_path`       VARCHAR(255) NULL,
   `created_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_at`      TIMESTAMP NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_user_tanggal` (`user_id`, `tanggal`),
   CONSTRAINT `fk_harian_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE

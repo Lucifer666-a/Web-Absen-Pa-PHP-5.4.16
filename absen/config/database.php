@@ -66,7 +66,7 @@ try {
         `status_checkin`  ENUM('tepat_waktu', 'terlambat') NULL,
         `foto_path`       VARCHAR(255) NULL,
         `created_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        `updated_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        `updated_at`      TIMESTAMP NULL DEFAULT NULL,
         PRIMARY KEY (`id`),
         UNIQUE KEY `unique_user_tanggal` (`user_id`, `tanggal`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
@@ -118,7 +118,7 @@ try {
         `id`         INT NOT NULL AUTO_INCREMENT,
         `token_jti`  VARCHAR(128) NOT NULL,
         `user_id`    INT NOT NULL,
-        `expires_at` TIMESTAMP NOT NULL,
+        `expires_at` DATETIME NOT NULL,
         `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (`id`),
         UNIQUE KEY `unique_jti` (`token_jti`),
