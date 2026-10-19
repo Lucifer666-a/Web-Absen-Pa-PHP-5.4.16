@@ -15,7 +15,7 @@ $api_apel_url  = $api_base_url . 'absen_apel.php';
 
 // Tentukan Tab Aktif: 'rapat', 'apel', 'harian', 'rekap', 'users', atau 'pengaturan'
 $active_tab = isset($_GET['tab']) ? $_GET['tab'] : 'rapat';
-if (!in_array($active_tab, ['rapat', 'apel', 'harian', 'rekap', 'users', 'pengaturan'], true)) {
+if (!in_array($active_tab, array('rapat', 'apel', 'harian', 'rekap', 'users', 'pengaturan'), true)) {
     $active_tab = 'rapat';
 }
 
@@ -27,10 +27,10 @@ $total_users = count($list_users);
 // ----------------------------------------------------
 // DATA TAB 1: PRESENSI RAPAT / ACARA (Jika tab rapat)
 // ----------------------------------------------------
-$list_acara = [];
+$list_acara = array();
 $selected_acara_id = isset($_GET['acara_id']) ? $_GET['acara_id'] : null;
 $active_acara = null;
-$data_presensi = [];
+$data_presensi = array();
 $total_hadir = 0;
 
 if ($active_tab === 'rapat') {
@@ -50,7 +50,7 @@ if ($active_tab === 'rapat') {
 
     if ($selected_acara_id) {
         $presensiStmt = $pdo->prepare("SELECT * FROM presensi WHERE acara_id = ? ORDER BY waktu_absen DESC");
-        $presensiStmt->execute([$selected_acara_id]);
+        $presensiStmt->execute(array($selected_acara_id));
         $data_presensi = $presensiStmt->fetchAll();
     }
     $total_hadir = count($data_presensi);
@@ -63,14 +63,14 @@ $sesi_filter  = isset($_GET['sesi']) ? $_GET['sesi'] : 'semua';
 $tgl_mulai    = isset($_GET['tgl_mulai']) ? $_GET['tgl_mulai'] : '';
 $tgl_selesai  = isset($_GET['tgl_selesai']) ? $_GET['tgl_selesai'] : '';
 $apel_user_id = isset($_GET['apel_user_id']) ? (int)$_GET['apel_user_id'] : 0;
-$data_presensi_apel = [];
+$data_presensi_apel = array();
 $total_apel = 0;
 
 if ($active_tab === 'apel') {
     $sqlApel = "SELECT * FROM presensi_apel WHERE 1=1";
-    $paramsApel = [];
+    $paramsApel = array();
 
-    if (in_array($sesi_filter, ['pagi', 'sore'], true)) {
+    if (in_array($sesi_filter, array('pagi', 'sore'), true)) {
         $sqlApel .= " AND sesi = ?";
         $paramsApel[] = $sesi_filter;
     }
@@ -109,12 +109,12 @@ if ($active_tab === 'apel') {
 $harian_tgl_mulai   = isset($_GET['harian_tgl_mulai']) ? $_GET['harian_tgl_mulai'] : '';
 $harian_tgl_selesai = isset($_GET['harian_tgl_selesai']) ? $_GET['harian_tgl_selesai'] : '';
 $harian_user_id     = isset($_GET['harian_user_id']) ? (int)$_GET['harian_user_id'] : 0;
-$data_presensi_harian = [];
+$data_presensi_harian = array();
 $total_harian = 0;
 
 if ($active_tab === 'harian') {
     $sqlHarian = "SELECT h.*, u.nama, u.jabatan, u.nip FROM absensi_harian h JOIN users u ON h.user_id = u.id WHERE 1=1";
-    $paramsHarian = [];
+    $paramsHarian = array();
 
     if (!empty($harian_tgl_mulai)) {
         $sqlHarian .= " AND h.tanggal >= ?";
@@ -144,8 +144,8 @@ if (!preg_match('/^\d{4}-\d{2}$/', $rekap_bulan)) {
     $rekap_bulan = date('Y-m');
 }
 $rekap_tgl_absent = isset($_GET['rekap_tgl_absent']) ? $_GET['rekap_tgl_absent'] : date('Y-m-d');
-$data_rekap_pegawai = [];
-$data_absent_apel = [];
+$data_rekap_pegawai = array();
+$data_absent_apel = array();
 
 if ($active_tab === 'rekap') {
     $likeBulan = $rekap_bulan . '-%';
@@ -159,10 +159,10 @@ if ($active_tab === 'rekap') {
         WHERE tanggal LIKE ?
         GROUP BY user_id, nama
     ");
-    $apelAggStmt->execute([$likeBulan]);
+    $apelAggStmt->execute(array($likeBulan));
     $apelAgg = $apelAggStmt->fetchAll();
-    $pagiByUser = []; $pagiByNama = [];
-    $soreByUser = []; $soreByNama = [];
+    $pagiByUser = array(); $pagiByNama = array();
+    $soreByUser = array(); $soreByNama = array();
     foreach ($apelAgg as $r) {
         if ($r['uid'] > 0) {
             $pagiByUser[$r['uid']] = (isset($pagiByUser[$r['uid']]) ? $pagiByUser[$r['uid']] : 0) + (int)$r['cnt_pagi'];
@@ -181,9 +181,9 @@ if ($active_tab === 'rekap') {
         WHERE waktu_absen LIKE ?
         GROUP BY user_id, nama
     ");
-    $rapatAggStmt->execute([$likeBulan]);
+    $rapatAggStmt->execute(array($likeBulan));
     $rapatAgg = $rapatAggStmt->fetchAll();
-    $rapatByUser = []; $rapatByNama = [];
+    $rapatByUser = array(); $rapatByNama = array();
     foreach ($rapatAgg as $r) {
         if ($r['uid'] > 0) {
             $rapatByUser[$r['uid']] = (isset($rapatByUser[$r['uid']]) ? $rapatByUser[$r['uid']] : 0) + (int)$r['cnt_rapat'];
@@ -200,8 +200,8 @@ if ($active_tab === 'rekap') {
         WHERE tanggal LIKE ?
         GROUP BY user_id
     ");
-    $harianAggStmt->execute([$likeBulan]);
-    $harianByUser = [];
+    $harianAggStmt->execute(array($likeBulan));
+    $harianByUser = array();
     foreach ($harianAggStmt->fetchAll() as $r) {
         $harianByUser[$r['user_id']] = (int)$r['cnt_harian'];
     }
@@ -232,7 +232,7 @@ if ($active_tab === 'rekap') {
         )
         ORDER BY u.nama ASC
     ");
-    $stmtAbsentApel->execute([$rekap_tgl_absent, $rekap_tgl_absent]);
+    $stmtAbsentApel->execute(array($rekap_tgl_absent, $rekap_tgl_absent));
     $data_absent_apel = $stmtAbsentApel->fetchAll();
 }
 
@@ -240,10 +240,10 @@ if ($active_tab === 'rekap') {
 // LOGIKA GANTI PASSWORD ADMIN & LOG AKTIVITAS & GRAFIK (Jika tab pengaturan)
 // ----------------------------------------------------
 $change_pass_msg = '';
-$list_logs = [];
-$chart_dates = [];
-$chart_apel_data = [];
-$chart_harian_data = [];
+$list_logs = array();
+$chart_dates = array();
+$chart_apel_data = array();
+$chart_harian_data = array();
 
 if ($active_tab === 'pengaturan') {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_change_admin_pass'])) {
@@ -257,13 +257,13 @@ if ($active_tab === 'pengaturan') {
             } else {
                 $admin_id = isset($_SESSION['admin_id']) ? $_SESSION['admin_id'] : 0;
                 $stmtAdm = $pdo->prepare("SELECT password FROM admin WHERE id = ? LIMIT 1");
-                $stmtAdm->execute([$admin_id]);
+                $stmtAdm->execute(array($admin_id));
                 $admData = $stmtAdm->fetch();
 
                 if ($admData && password_verify($old_pass, $admData['password'])) {
                     $newHash = password_hash($new_pass, PASSWORD_DEFAULT);
                     $stmtUp = $pdo->prepare("UPDATE admin SET password = ? WHERE id = ?");
-                    $stmtUp->execute([$newHash, $admin_id]);
+                    $stmtUp->execute(array($newHash, $admin_id));
                     logAdminActivity($pdo, 'Ganti Password Admin', 'Admin mengubah password akun sendiri');
                     $change_pass_msg = 'success';
                 } else {
@@ -280,7 +280,7 @@ if ($active_tab === 'pengaturan') {
     $list_logs = $stmtLogs->fetchAll();
 
     // Data Grafik Kehadiran 7 Hari Terakhir
-    $chart_days_map = [];
+    $chart_days_map = array();
     for ($i = 6; $i >= 0; $i--) {
         $d = date('Y-m-d', strtotime("-$i days"));
         $chart_dates[] = date('d/m', strtotime($d));
@@ -293,7 +293,7 @@ if ($active_tab === 'pengaturan') {
     $endDate7   = date('Y-m-d');
 
     $stApelGroup = $pdo->prepare("SELECT tanggal, COUNT(*) as cnt FROM presensi_apel WHERE tanggal >= ? AND tanggal <= ? GROUP BY tanggal");
-    $stApelGroup->execute([$startDate7, $endDate7]);
+    $stApelGroup->execute(array($startDate7, $endDate7));
     foreach ($stApelGroup->fetchAll() as $rowA) {
         if (isset($chart_days_map[$rowA['tanggal']])) {
             $chart_apel_data[$chart_days_map[$rowA['tanggal']]] = (int)$rowA['cnt'];
@@ -301,7 +301,7 @@ if ($active_tab === 'pengaturan') {
     }
 
     $stHarianGroup = $pdo->prepare("SELECT tanggal, COUNT(*) as cnt FROM absensi_harian WHERE tanggal >= ? AND tanggal <= ? GROUP BY tanggal");
-    $stHarianGroup->execute([$startDate7, $endDate7]);
+    $stHarianGroup->execute(array($startDate7, $endDate7));
     foreach ($stHarianGroup->fetchAll() as $rowH) {
         if (isset($chart_days_map[$rowH['tanggal']])) {
             $chart_harian_data[$chart_days_map[$rowH['tanggal']]] = (int)$rowH['cnt'];
@@ -1271,7 +1271,7 @@ $current_tab_info = isset($tab_titles[$active_tab]) ? $tab_titles[$active_tab] :
                                         </td>
                                         <td>
                                             <?php 
-                                                $hariIndo = ['1'=>'Senin', '2'=>'Selasa', '3'=>'Rabu', '4'=>'Kamis', '5'=>'Jumat', '6'=>'Sabtu', '7'=>'Minggu'];
+                                                $hariIndo = array('1'=>'Senin', '2'=>'Selasa', '3'=>'Rabu', '4'=>'Kamis', '5'=>'Jumat', '6'=>'Sabtu', '7'=>'Minggu');
                                                 $numHari = date('N', strtotime($row['tanggal']));
                                                 $namaHari = isset($hariIndo[$numHari]) ? $hariIndo[$numHari] : '';
                                             ?>
