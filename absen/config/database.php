@@ -9,7 +9,7 @@ require_once __DIR__ . '/password_compat.php';
 $host = '127.0.0.1';
 $db   = 'db_absen';
 $user = 'root';
-$pass = ''; // Sesuaikan dengan password database local Anda
+$pass = 'palembangsipp311'; // Sesuaikan dengan password database local Anda
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
